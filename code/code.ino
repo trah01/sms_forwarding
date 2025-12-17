@@ -24,12 +24,14 @@
 #include <WiFiClientSecure.h>
 #include <WebServer.h>
 #include <Preferences.h>
+#include <SPIFFS.h>
 #include <pdulib.h>
 #define ENABLE_SMTP
 #define ENABLE_DEBUG
 #include <ReadyMail.h>
 #include <HTTPClient.h>
 #include <base64.h>
+#include <esp_task_wdt.h>
 
 // 项目配置文件
 #include "wifi_config.h"
@@ -88,27 +90,30 @@ void setup() {
   // 初始化长短信缓存
   initConcatBuffer();
   
+  // 初始化短信存储(SPIFFS)
+  initSmsStorage();
+  
   // 加载配置
   loadConfig();
-  configValid = isConfigValid();
+  configValid = isConfigValid();\
   
   WiFiMulti.addAP(WIFI_SSID, WIFI_PASS);
   Serial.println("连接wifi");
-  Serial.println(WIFI_SSID);
   while (WiFiMulti.run() != WL_CONNECTED) blink_short();
-  Serial.println("wifi已连接");
-  Serial.print("IP地址: ");
-  Serial.println(WiFi.localIP());
+  Serial.printf("WiFi已连接, IP: %s\n", WiFi.localIP().toString().c_str());
   
   // 启动 HTTP 服务器
   server.on("/", handleRoot);
   server.on("/save", HTTP_POST, handleSave);
   server.on("/tools", handleToolsPage);
-  server.on("/sms", handleToolsPage);  // 兼容旧链接
   server.on("/sendsms", HTTP_POST, handleSendSms);
   server.on("/ping", HTTP_POST, handlePing);
   server.on("/timer", HTTP_POST, handleTimer);
   server.on("/query", handleQuery);
+  server.on("/restart", HTTP_POST, handleRestart);     // 重启
+  server.on("/history", handleSmsHistory);             // 短信历史
+  server.on("/stats", handleStats);                    // 统计信息
+  server.on("/filter", HTTP_POST, handleFilterSave);   // 黑白名单保存
   server.begin();
   Serial.println("HTTP服务器已启动");
   
@@ -121,46 +126,52 @@ void setup() {
   
   // 设置短信自动上报
   while (!sendATandWaitOK("AT+CNMI=2,2,0,0,0", 1000)) {
-    Serial.println("设置CNMI失败，重试...");
     blink_short();
   }
-  Serial.println("CNMI参数设置完成");
   
   // 配置 PDU 模式
   while (!sendATandWaitOK("AT+CMGF=0", 1000)) {
-    Serial.println("设置PDU模式失败，重试...");
     blink_short();
   }
-  Serial.println("PDU模式设置完成");
   
   // 等待 CGATT 附着
   while (!waitCGATT1()) {
-    Serial.println("等待CGATT附着...");
     blink_short();
   }
-  Serial.println("CGATT已附着");
+  
+  // 开启来电显示 (CLIP)
+  while (!sendATandWaitOK("AT+CLIP=1", 1000)) {
+    blink_short();
+  }
+  Serial.println("来电显示已开启");
+  Serial.println("模组初始化完成");
   digitalWrite(LED_BUILTIN, LOW);
   
-  // 如果配置有效，发送启动通知
+  // 发送启动通知
   if (configValid) {
-    Serial.println("配置有效，发送启动通知...");
-    String subject = "短信转发器已启动";
-    String body = "设备已启动\n设备地址: " + getDeviceUrl();
-    sendEmailNotification(subject.c_str(), body.c_str());
+    String body = "设备已启动\n地址: " + getDeviceUrl() + "\n启动次数: " + String(stats.bootCount);
+    sendEmailNotification("短信转发器已启动", body.c_str());
   }
   
-  // ========== MQTT 初始化 ==========
-  Serial.println("初始化MQTT...");
+  // MQTT 初始化
   initMqttTopics();
   mqttClient.setCallback(mqttCallback);
   mqttClient.setBufferSize(1024);
-  
-  // 如果 MQTT 已启用，首次连接
   if (config.mqttEnabled && config.mqttServer.length() > 0) {
     mqttClient.setServer(config.mqttServer.c_str(), config.mqttPort);
     mqttReconnect();
   }
-  Serial.println("MQTT初始化完成");
+  
+  // 启用看门狗 (30秒超时)
+  // 适配 ESP32 Arduino Core v3.0+
+  esp_task_wdt_config_t wdt_config = {
+      .timeout_ms = 30000,
+      .idle_core_mask = (1 << 0), // ESP32-C3 是单核，使用 core 0
+      .trigger_panic = true
+  };
+  esp_task_wdt_init(&wdt_config);
+  esp_task_wdt_add(NULL);
+  Serial.println("看门狗已启用(30s)");
 }
 
 // ========== loop 函数 ==========
@@ -172,39 +183,32 @@ void loop() {
   if (!configValid) {
     if (millis() - lastPrintTime >= 30000) {
       lastPrintTime = millis();
-      Serial.println("请访问 " + getDeviceUrl() + " 配置系统参数");
+      Serial.printf("请访问 %s 配置\n", getDeviceUrl().c_str());
     }
   }
   
-  // 检查定时任务执行（使用秒比较避免溢出）
+  // 检查定时任务
   if (config.timerEnabled && timerIntervalSec > 0 && configValid) {
     unsigned long elapsedSec = (millis() - lastTimerExec) / 1000;
     if (elapsedSec >= timerIntervalSec) {
-      Serial.println("执行定时任务...");
       lastTimerExec = millis();
       
       if (config.timerType == 0) {
-        // 定时 Ping
-        Serial.println("开始定时Ping...");
         if (sendATandWaitOK("AT+CGACT=1,1", 10000)) {
           sendATandWaitOK("AT+MPING=1,\"8.8.8.8\",4,32,255", 30000);
           delay(2000);
           sendATandWaitOK("AT+CGACT=0,1", 5000);
-          Serial.println("定时Ping完成");
-          
           publishMqttStatus("active_ping");
         }
-      } else if (config.timerType == 1 && config.timerPhone.length() > 0 && config.timerMessage.length() > 0) {
-        // 定时发送短信
-        Serial.println("发送保号短信...");
+      } else if (config.timerType == 1 && config.timerPhone.length() > 0) {
         sendSMS(config.timerPhone.c_str(), config.timerMessage.c_str());
-        
+        stats.smsSent++;
         publishMqttSmsSent(config.timerPhone.c_str(), config.timerMessage.c_str(), true);
       }
     }
   }
   
-  // ========== MQTT 处理 ==========
+  // MQTT 处理
   if (config.mqttEnabled && WiFi.status() == WL_CONNECTED) {
     if (!mqttClient.connected()) {
       unsigned long now = millis();
@@ -215,7 +219,6 @@ void loop() {
     } else {
       mqttClient.loop();
       
-      // 定期上报设备状态
       unsigned long now = millis();
       if (now - lastMqttStatusReport > MQTT_STATUS_INTERVAL) {
         lastMqttStatusReport = now;
@@ -232,4 +235,7 @@ void loop() {
   
   // 检查 URC 和解析
   checkSerial1URC();
+  
+  // 喂狗
+  esp_task_wdt_reset();
 }

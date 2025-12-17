@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <vector>
 
 // 串口映射
 #define TXD 3
@@ -14,21 +15,47 @@ enum PushType {
   PUSH_TYPE_POST_JSON = 1, // POST JSON格式 {"sender":"xxx","message":"xxx","timestamp":"xxx"}
   PUSH_TYPE_BARK = 2,      // Bark格式 POST {"title":"xxx","body":"xxx"}
   PUSH_TYPE_GET = 3,       // GET请求，参数放URL中
-  PUSH_TYPE_CUSTOM = 4     // 自定义模板
+  PUSH_TYPE_CUSTOM = 4,    // 自定义模板
+  PUSH_TYPE_TELEGRAM = 5,  // Telegram Bot
+  PUSH_TYPE_WECOM = 6,     // 企业微信机器人
+  PUSH_TYPE_DINGTALK = 7   // 钉钉机器人
 };
 
 // 最大推送通道数
 #define MAX_PUSH_CHANNELS 3
 
-// 推送通道配置（通用设计，支持多种推送方式）
+// 短信历史记录设置
+#define MAX_SMS_HISTORY 100
+
+// 黑白名单设置
+#define MAX_FILTER_NUMBERS 100  // 扩容到100个
+
+// 推送通道配置
 struct PushChannel {
-  bool enabled;           // 是否启用
-  PushType type;          // 推送类型
-  String name;            // 通道名称（用于显示）
-  String url;             // 推送URL（webhook地址）
-  String key1;            // 额外参数1（如：钉钉secret、pushplus token等）
-  String key2;            // 额外参数2（备用）
-  String customBody;      // 自定义请求体模板（使用 {sender} {message} {timestamp} 占位符）
+  bool enabled;
+  PushType type;
+  String name;
+  String url;
+  String key1;
+  String key2;
+  String customBody;
+};
+
+// 短信历史记录结构 (旧结构保留，实际上改用 SPIFFS)
+struct SmsRecord {
+  String sender;
+  String message;
+  String timestamp;
+  bool valid;
+};
+
+// 统计计数器结构
+struct Statistics {
+  unsigned long smsReceived;    // 收到短信数
+  unsigned long smsSent;        // 发送短信数
+  unsigned long pushSuccess;    // 推送成功数
+  unsigned long pushFailed;     // 推送失败数
+  unsigned long bootCount;      // 启动次数
 };
 
 // 配置参数结构体
@@ -40,25 +67,31 @@ struct Config {
   String smtpSendTo;
 
   bool emailEnabled;
-  PushChannel pushChannels[MAX_PUSH_CHANNELS];  // 多推送通道
-  String webUser;      // Web管理账号
-  String webPass;      // Web管理密码
+  PushChannel pushChannels[MAX_PUSH_CHANNELS];
+  String webUser;
+  String webPass;
   
   // 定时任务配置
-  bool timerEnabled;        // 是否启用定时任务
-  int timerType;            // 0=Ping, 1=短信
-  int timerInterval;        // 间隔时间（天）
-  String timerPhone;        // 定时短信目标号码
-  String timerMessage;      // 定时短信内容
+  bool timerEnabled;
+  int timerType;
+  int timerInterval;
+  String timerPhone;
+  String timerMessage;
   
   // MQTT 配置
-  bool mqttEnabled;         // 是否启用 MQTT
-  bool mqttControlOnly;     // 仅控制模式（不推送短信内容）
-  String mqttServer;        // MQTT 服务器地址
-  int mqttPort;             // MQTT 端口
-  String mqttUser;          // MQTT 用户名
-  String mqttPass;          // MQTT 密码
-  String mqttPrefix;        // MQTT 主题前缀
+  bool mqttEnabled;
+  bool mqttControlOnly;
+  String mqttServer;
+  int mqttPort;
+  String mqttUser;
+  String mqttPass;
+  String mqttPrefix;
+  
+  // 黑白名单配置
+  bool filterEnabled;          // 是否启用过滤
+  bool filterIsWhitelist;      // true=白名单, false=黑名单
+  // 使用单个长字符串存储，内存中逗号分隔，避免定义大数组占用栈空间
+  String filterList;  
 };
 
 // 默认Web管理账号密码
@@ -66,29 +99,29 @@ struct Config {
 #define DEFAULT_WEB_PASS "admin123"
 
 // 长短信合并相关定义
-#define MAX_CONCAT_PARTS 10       // 最大支持的长短信分段数
-#define CONCAT_TIMEOUT_MS 30000   // 长短信等待超时时间(毫秒)
-#define MAX_CONCAT_MESSAGES 5     // 最多同时缓存的长短信组数
+#define MAX_CONCAT_PARTS 10
+#define CONCAT_TIMEOUT_MS 30000
+#define MAX_CONCAT_MESSAGES 5
 
 #define SERIAL_BUFFER_SIZE 500
 #define MAX_PDU_LENGTH 300
 
 // 长短信分段结构
 struct SmsPart {
-  bool valid;           // 该分段是否有效
-  String text;          // 分段内容
+  bool valid;
+  String text;
 };
 
 // 长短信缓存结构
 struct ConcatSms {
-  bool inUse;                           // 是否正在使用
-  int refNumber;                        // 参考号
-  String sender;                        // 发送者
-  String timestamp;                     // 时间戳（使用第一个收到的分段的时间戳）
-  int totalParts;                       // 总分段数
-  int receivedParts;                    // 已收到的分段数
-  unsigned long firstPartTime;          // 收到第一个分段的时间
-  SmsPart parts[MAX_CONCAT_PARTS];      // 各分段内容
+  bool inUse;
+  int refNumber;
+  String sender;
+  String timestamp;
+  int totalParts;
+  int receivedParts;
+  unsigned long firstPartTime;
+  SmsPart parts[MAX_CONCAT_PARTS];
 };
 
 // 全局变量声明 (extern)
@@ -102,11 +135,22 @@ extern ConcatSms concatBuffer[MAX_CONCAT_MESSAGES];
 extern char serialBuf[SERIAL_BUFFER_SIZE];
 extern int serialBufLen;
 
+// 短信历史和统计
+extern SmsRecord smsHistory[MAX_SMS_HISTORY];
+extern int smsHistoryIndex;
+extern Statistics stats;
+
 // 函数声明
 void saveConfig();
 void loadConfig();
 bool isPushChannelValid(const PushChannel& ch);
 bool isConfigValid();
 String getDeviceUrl();
+void initSmsStorage();
+void addSmsToHistory(const char* sender, const char* message, const char* timestamp);
+String getSmsHistory();
+bool isNumberFiltered(const char* number);
+void saveStats();
+void loadStats();
 
 #endif // CONFIG_H

@@ -5,10 +5,9 @@
 #include <WebServer.h>
 #include "config.h"
 
-// 外部依赖
 extern WebServer server;
 
-// 函数声明
+// Web 页面处理
 bool checkAuth();
 void handleRoot();
 void handleToolsPage();
@@ -18,11 +17,16 @@ void handlePing();
 void handleTimer();
 void handleSave();
 
-// AT 命令相关
+// 新功能
+void handleRestart();
+void handleSmsHistory();
+void handleStats();
+void handleFilterSave();
+
+// AT 命令
 String sendATCommand(const char* cmd, unsigned long timeout);
 bool sendATandWaitOK(const char* cmd, unsigned long timeout);
 bool waitCGATT1();
-void resetModule();
 void blink_short(unsigned long gap_time = 500);
 
-#endif // WEB_HANDLERS_H
+#endif

@@ -19,6 +19,7 @@ void clearConcatSlot(int slot);
 void checkConcatTimeout();
 bool sendSMS(const char* phoneNumber, const char* message);
 void processSmsContent(const char* sender, const char* text, const char* timestamp);
+void processIncomingCall(const char* callerNumber);
 void checkSerial1URC();
 String readSerialLine(HardwareSerial& port);
 bool isHexString(const String& str);

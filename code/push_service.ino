@@ -119,6 +119,53 @@ void sendToChannel(const PushChannel& channel, const char* sender, const char* m
       break;
     }
     
+    case PUSH_TYPE_TELEGRAM: {
+      // Telegram Bot 推送
+      // URL格式: https://api.telegram.org/bot<TOKEN>/sendMessage
+      // 或者用户直接填完整URL，我们在key1里存chat_id
+      http.begin(channel.url);
+      http.addHeader("Content-Type", "application/json");
+      String text = "📱 *来自: " + senderEscaped + "*\n" + messageEscaped + "\n\n_" + timestampEscaped + "_";
+      String jsonData = "{";
+      jsonData += "\"chat_id\":\"" + channel.key1 + "\",";
+      jsonData += "\"text\":\"" + text + "\",";
+      jsonData += "\"parse_mode\":\"Markdown\"";
+      jsonData += "}";
+      Serial.println("Telegram: " + jsonData);
+      httpCode = http.POST(jsonData);
+      break;
+    }
+    
+    case PUSH_TYPE_WECOM: {
+      // 企业微信机器人 (Webhook)
+      // URL格式: https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx
+      http.begin(channel.url);
+      http.addHeader("Content-Type", "application/json");
+      String content = "📱 来自: " + String(sender) + "\n" + String(message) + "\n\n" + String(timestamp);
+      String jsonData = "{";
+      jsonData += "\"msgtype\":\"text\",";
+      jsonData += "\"text\":{\"content\":\"" + jsonEscape(content) + "\"}";
+      jsonData += "}";
+      Serial.println("企业微信: " + jsonData);
+      httpCode = http.POST(jsonData);
+      break;
+    }
+    
+    case PUSH_TYPE_DINGTALK: {
+      // 钉钉机器人 (Webhook)
+      // URL格式: https://oapi.dingtalk.com/robot/send?access_token=xxx
+      http.begin(channel.url);
+      http.addHeader("Content-Type", "application/json");
+      String content = "📱 来自: " + String(sender) + "\n" + String(message) + "\n\n" + String(timestamp);
+      String jsonData = "{";
+      jsonData += "\"msgtype\":\"text\",";
+      jsonData += "\"text\":{\"content\":\"" + jsonEscape(content) + "\"}";
+      jsonData += "}";
+      Serial.println("钉钉: " + jsonData);
+      httpCode = http.POST(jsonData);
+      break;
+    }
+    
     default:
       Serial.println("未知推送类型");
       return;

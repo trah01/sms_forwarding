@@ -281,28 +281,34 @@ void processSmsContent(const char* sender, const char* text, const char* timesta
   String formattedTime = formatTimestamp(String(timestamp));
   String verifyCode = extractVerifyCode(cleanedText);
   
-  Serial.println("=== 处理短信内容 ===");
-  Serial.println("发送者: " + String(sender));
-  Serial.println("时间: " + formattedTime);
-  Serial.println("内容: " + cleanedText);
-  if (verifyCode.length() > 0) {
-    Serial.println("验证码: " + verifyCode);
+  Serial.println("=== 处理短信 ===");
+  Serial.printf("发送者: %s\n", sender);
+  Serial.printf("时间: %s\n", formattedTime.c_str());
+  
+  // 添加到短信历史
+  addSmsToHistory(sender, cleanedText.c_str(), formattedTime.c_str());
+  
+  // 检查黑白名单
+  if (isNumberFiltered(sender)) {
+    Serial.println("号码被过滤，跳过推送");
+    return;
   }
-  Serial.println("====================");
+  
+  if (verifyCode.length() > 0) {
+    Serial.printf("验证码: %s\n", verifyCode.c_str());
+  }
 
-  // 发送通知 http（推送到所有启用的通道，使用清理后的内容）
+  // 发送通知 http
   sendSMSToServer(sender, cleanedText.c_str(), formattedTime.c_str());
   
-  // 发送 MQTT 通知（使用清理后的内容）
+  // 发送 MQTT 通知
   publishMqttSmsReceived(sender, cleanedText.c_str(), formattedTime.c_str());
   
-  // 发送通知邮件（优化主题格式）
+  // 发送通知邮件
   String subject;
   if (verifyCode.length() > 0) {
-    // 有验证码时，主题显示验证码
     subject = "[" + verifyCode + "] " + String(sender);
   } else {
-    // 无验证码时，显示发送者和内容摘要
     String preview = cleanedText.substring(0, 30);
     if (cleanedText.length() > 30) preview += "...";
     subject = String(sender) + ": " + preview;
@@ -313,6 +319,51 @@ void processSmsContent(const char* sender, const char* text, const char* timesta
   body += "内容:\n" + cleanedText;
   
   sendEmailNotification(subject.c_str(), body.c_str());
+}
+
+// 处理来电通知
+void processIncomingCall(const char* callerNumber) {
+  Serial.println("=== 来电通知 ===");
+  Serial.printf("来电号码: %s\n", callerNumber);
+  
+  // 获取当前时间（简单格式）
+  unsigned long uptimeSec = millis() / 1000;
+  String timestamp = "运行 " + String(uptimeSec / 3600) + ":" + 
+                     String((uptimeSec % 3600) / 60) + ":" + 
+                     String(uptimeSec % 60);
+  
+  // 构建通知内容
+  String message = "📞 来电通知\n来电号码: " + String(callerNumber);
+  
+  // HTTP 推送
+  if (WiFi.status() == WL_CONNECTED) {
+    for (int i = 0; i < MAX_PUSH_CHANNELS; i++) {
+      if (isPushChannelValid(config.pushChannels[i])) {
+        sendToChannel(config.pushChannels[i], callerNumber, "📞 来电中...", timestamp.c_str());
+      }
+    }
+  }
+  
+  // MQTT 推送
+  if (config.mqttEnabled && mqttClient.connected() && !config.mqttControlOnly) {
+    String json = "{";
+    json += "\"type\":\"incoming_call\",";
+    json += "\"caller\":\"" + String(callerNumber) + "\",";
+    json += "\"timestamp\":\"" + timestamp + "\"";
+    json += "}";
+    mqttClient.publish((config.mqttPrefix + "/call").c_str(), json.c_str());
+    Serial.println("MQTT来电通知已发送");
+  }
+  
+  // 邮件通知
+  if (config.emailEnabled) {
+    String subject = "📞 来电: " + String(callerNumber);
+    String body = "来电号码: " + String(callerNumber) + "\n";
+    body += "时间: " + timestamp;
+    sendEmailNotification(subject.c_str(), body.c_str());
+  }
+  
+  Serial.println("来电通知已发送");
 }
 
 // 读取串口一行（含回车换行），返回行字符串，无新行时返回空
@@ -361,6 +412,27 @@ void checkSerial1URC() {
   Serial.println("Debug> " + line);
 
   if (state == IDLE) {
+    // 检测来电 RING
+    if (line.startsWith("RING") || line.indexOf("RING") >= 0) {
+      Serial.println("检测到来电振铃...");
+      // 继续等待 +CLIP 获取号码
+    }
+    
+    // 检测来电号码显示 +CLIP
+    if (line.startsWith("+CLIP:")) {
+      Serial.println("检测到来电: " + line);
+      // 解析来电号码 +CLIP: "号码",类型
+      int quoteStart = line.indexOf('"');
+      int quoteEnd = line.indexOf('"', quoteStart + 1);
+      if (quoteStart >= 0 && quoteEnd > quoteStart) {
+        String callerNumber = line.substring(quoteStart + 1, quoteEnd);
+        Serial.println("来电号码: " + callerNumber);
+        
+        // 发送来电通知
+        processIncomingCall(callerNumber.c_str());
+      }
+    }
+    
     // 检测到短信上报 URC 头
     if (line.startsWith("+CMT:")) {
       Serial.println("检测到+CMT，等待PDU数据...");

@@ -1,0 +1,15 @@
+# 私有功能模块 (不上传到公开仓库)
+code/call_forward_private.h
+
+# IDE 文件
+.vscode/
+*.code-workspace
+
+# 编译产物
+build/
+*.bin
+*.elf
+
+# 系统文件
+.DS_Store
+Thumbs.db

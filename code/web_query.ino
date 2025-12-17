@@ -250,6 +250,75 @@ void handleQuery() {
     message += "<tr><td>WiFi信道</td><td>" + String(WiFi.channel()) + "</td></tr>";
     message += "</table>";
   }
+  else if (type == "balance" || type == "ussd") {
+    // USSD 余额查询 (giffgaff: *100#)
+    // USSD 走信令通道，不消耗流量和话费
+    String ussdCode = server.arg("code");
+    if (ussdCode.length() == 0) ussdCode = "*100#"; // 默认 giffgaff 余额查询
+    
+    Serial.println("USSD查询: " + ussdCode);
+    
+    // 清空串口缓冲
+    while (Serial1.available()) Serial1.read();
+    
+    // 发送 USSD 命令
+    String cmd = "AT+CUSD=1,\"" + ussdCode + "\",15";
+    Serial1.println(cmd);
+    
+    unsigned long start = millis();
+    String resp = "";
+    bool gotResult = false;
+    
+    // 等待 +CUSD: 响应 (最多 30 秒)
+    while (millis() - start < 30000) {
+      while (Serial1.available()) {
+        char c = Serial1.read();
+        resp += c;
+        Serial.print(c);
+        
+        // 查找 +CUSD: 响应
+        int cusdIdx = resp.indexOf("+CUSD:");
+        if (cusdIdx >= 0) {
+          // 等待完整响应
+          delay(500);
+          while (Serial1.available()) {
+            resp += (char)Serial1.read();
+          }
+          gotResult = true;
+          break;
+        }
+        
+        if (resp.indexOf("ERROR") >= 0) {
+          break;
+        }
+      }
+      if (gotResult || resp.indexOf("ERROR") >= 0) break;
+      delay(10);
+    }
+    
+    Serial.println("\nUSSD响应: " + resp);
+    
+    if (gotResult) {
+      success = true;
+      // 解析 +CUSD: 响应
+      // 格式: +CUSD: 0,"内容",15
+      int cusdIdx = resp.indexOf("+CUSD:");
+      int quoteStart = resp.indexOf("\"", cusdIdx);
+      int quoteEnd = resp.indexOf("\"", quoteStart + 1);
+      if (quoteStart >= 0 && quoteEnd > quoteStart) {
+        message = resp.substring(quoteStart + 1, quoteEnd);
+        // 将可能的换行符转为 HTML 换行
+        message.replace("\\n", "<br>");
+        message.replace("\n", "<br>");
+      } else {
+        message = resp;
+      }
+    } else if (resp.indexOf("ERROR") >= 0) {
+      message = "USSD查询失败，请检查网络状态";
+    } else {
+      message = "USSD查询超时";
+    }
+  }
   else {
     message = "未知的查询类型";
   }
