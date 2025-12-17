@@ -4,9 +4,15 @@
 
 > 该项目可能不支持电信卡，具体请自测。
 
-本项目改自从[sms_forwarding](https://github.com/chenxuuu/sms_forwarding),删除了钉钉机器人\PushPlus\Server酱,有需要的可以使用原版,或者自定义http推送通道。
+本项目基于 [sms_forwarding](https://github.com/chenxuuu/sms_forwarding) 二次开发。
 
-本项目主要拆分了功能区，优化了ui界面，接入了mqtt，实现远程控制和推送，同时可以接入Home Assistant
+**删除的功能：** PushPlus、Server酱（可用自定义 Webhook 替代）
+
+**主要改进：**
+- 重构代码结构，模块化设计
+- 新增 Telegram推送、来电通知、USSD余额查询等功能
+- 全新现代化 Web 界面
+- 完整的 MQTT 支持，可接入 Home Assistant，提供传感器配置和自动化蓝图
 
 > 原项目固件的视频教程：[B站视频](https://www.bilibili.com/video/BV1cSmABYEiX),少部分不适用于当前修改版，大部分通用。
 
