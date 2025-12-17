@@ -10,6 +10,15 @@ Statistics stats = {0, 0, 0, 0, 0};
 // 保存配置到 NVS
 void saveConfig() {
   preferences.begin("sms_config", false);
+  
+  // 保存 WiFi 配置
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    String prefix = "wifi" + String(i);
+    preferences.putString((prefix + "ssid").c_str(), config.wifiNetworks[i].ssid);
+    preferences.putString((prefix + "pass").c_str(), config.wifiNetworks[i].password);
+    preferences.putBool((prefix + "en").c_str(), config.wifiNetworks[i].enabled);
+  }
+  
   preferences.putString("smtpServer", config.smtpServer);
   preferences.putInt("smtpPort", config.smtpPort);
   preferences.putString("smtpUser", config.smtpUser);
@@ -59,6 +68,22 @@ void saveConfig() {
 // 从 NVS 加载配置
 void loadConfig() {
   preferences.begin("sms_config", true);
+  
+  // 加载 WiFi 配置（首次使用时从 wifi_config.h 读取默认值）
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    String prefix = "wifi" + String(i);
+    if (i == 0) {
+      // 第一个网络默认使用 wifi_config.h 中的配置
+      config.wifiNetworks[i].ssid = preferences.getString((prefix + "ssid").c_str(), WIFI_SSID);
+      config.wifiNetworks[i].password = preferences.getString((prefix + "pass").c_str(), WIFI_PASS);
+      config.wifiNetworks[i].enabled = preferences.getBool((prefix + "en").c_str(), true);
+    } else {
+      config.wifiNetworks[i].ssid = preferences.getString((prefix + "ssid").c_str(), "");
+      config.wifiNetworks[i].password = preferences.getString((prefix + "pass").c_str(), "");
+      config.wifiNetworks[i].enabled = preferences.getBool((prefix + "en").c_str(), false);
+    }
+  }
+  
   config.smtpServer = preferences.getString("smtpServer", "");
   config.smtpPort = preferences.getInt("smtpPort", 465);
   config.smtpUser = preferences.getString("smtpUser", "");
@@ -148,9 +173,9 @@ bool isConfigValid() {
   return emailValid || pushValid;
 }
 
-// 获取设备 URL
+// 获取设备 URL（同时显示 mDNS 和 IP）
 String getDeviceUrl() {
-  return "http://" + WiFi.localIP().toString() + "/";
+  return "http://" MDNS_HOSTNAME ".local 或 http://" + WiFi.localIP().toString();
 }
 
 // 初始化 SPIFFS

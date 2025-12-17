@@ -97,6 +97,43 @@ void handleRoot() {
   html.replace("%MQTT_CLASS%", mqttClass);
   html.replace("%MQTT_PREFIX%", config.mqttPrefix);
   html.replace("%MQTT_ENABLED%", config.mqttEnabled ? "true" : "false");
+  
+  // MQTT 主题列表
+  String mqttTopicsHtml = "";
+  if (config.mqttEnabled && config.mqttServer.length() > 0) {
+    mqttTopicsHtml = mqttTopicStatus + "<br>" + mqttTopicSmsReceived;
+  } else {
+    mqttTopicsHtml = "未配置";
+  }
+  html.replace("%MQTT_TOPICS%", mqttTopicsHtml);
+  
+  // 来电通知状态
+  html.replace("%CLIP_STATUS%", clipSupported ? "已启用" : "不支持");
+  html.replace("%CLIP_CLASS%", clipSupported ? "b-ok" : "b-warn");
+
+  // 1.5 WiFi 网络配置 HTML
+  String wifiHtml = "";
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    String idx = String(i);
+    String enabledSw = config.wifiNetworks[i].enabled ? "on" : "";
+    String enabledVal = config.wifiNetworks[i].enabled ? "true" : "false";
+    String currentSsid = WiFi.SSID();
+    bool isCurrent = config.wifiNetworks[i].ssid.length() > 0 && config.wifiNetworks[i].ssid == currentSsid;
+    
+    wifiHtml += "<div style=\"padding:10px;background:#f8fafc;border-radius:8px;margin-bottom:8px;border:1px solid " + String(isCurrent ? "var(--success)" : "#e2e8f0") + "\">";
+    wifiHtml += "<div class=\"sw-row\" onclick=\"wfTog(" + idx + ")\">";
+    wifiHtml += "<span style=\"font-weight:600\">网络 " + String(i + 1);
+    if (isCurrent) wifiHtml += " <span class=\"badge b-ok\">当前</span>";
+    wifiHtml += "</span>";
+    wifiHtml += "<div id=\"wfs" + idx + "\" class=\"sw " + enabledSw + "\"></div>";
+    wifiHtml += "<input type=\"hidden\" id=\"wfe" + idx + "\" name=\"wifi" + idx + "en\" value=\"" + enabledVal + "\">";
+    wifiHtml += "</div>";
+    wifiHtml += "<div class=\"grid-2\" style=\"margin-top:8px\">";
+    wifiHtml += "<div class=\"fg\" style=\"margin-bottom:0\"><label>SSID</label><input name=\"wifi" + idx + "ssid\" value=\"" + config.wifiNetworks[i].ssid + "\" placeholder=\"WiFi名称\"></div>";
+    wifiHtml += "<div class=\"fg\" style=\"margin-bottom:0\"><label>密码</label><input name=\"wifi" + idx + "pass\" type=\"password\" value=\"" + config.wifiNetworks[i].password + "\" placeholder=\"WiFi密码\"></div>";
+    wifiHtml += "</div></div>";
+  }
+  html.replace("%WIFI_NETWORKS%", wifiHtml);
 
   // 2. 基础配置填写
   html.replace("%WEB_USER%", config.webUser);
@@ -225,6 +262,17 @@ void handleToolsPage() {
 void handleSave() {
   if (!checkAuth()) return;
   
+  // 喂狗防止超时
+  esp_task_wdt_reset();
+  
+  // WiFi 网络配置
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    String prefix = "wifi" + String(i);
+    config.wifiNetworks[i].ssid = server.arg(prefix + "ssid");
+    config.wifiNetworks[i].password = server.arg(prefix + "pass");
+    config.wifiNetworks[i].enabled = server.arg(prefix + "en") == "true";
+  }
+  
   // 获取新的 Web 账号密码
   String newWebUser = server.arg("webUser");
   String newWebPass = server.arg("webPass");
@@ -286,8 +334,15 @@ void handleSave() {
       timerIntervalSec = (unsigned long)config.timerInterval * 24UL * 60UL * 60UL;
   }
   
+  // 喂狗并保存配置
+  esp_task_wdt_reset();
   saveConfig();
+  esp_task_wdt_reset();
   configValid = isConfigValid();
+  
+  // 先发送响应
+  String json = "{\"success\":true,\"message\":\"配置已保存\"}";
+  server.send(200, "application/json", json);
   
   // 重启 MQTT (如果启用)
   if (config.mqttEnabled) {
@@ -295,9 +350,6 @@ void handleSave() {
   } else {
       mqttClient.disconnect();
   }
-
-  String json = "{\"success\":true,\"message\":\"配置已保存\"}";
-  server.send(200, "application/json", json);
 }
 
 // 处理发送短信请求

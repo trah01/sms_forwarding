@@ -23,6 +23,7 @@
 #include <WiFiMulti.h>
 #include <WiFiClientSecure.h>
 #include <WebServer.h>
+#include <ESPmDNS.h>
 #include <Preferences.h>
 #include <SPIFFS.h>
 #include <pdulib.h>
@@ -52,6 +53,7 @@ SMTPClient smtp(ssl_client);
 WebServer server(80);
 
 bool configValid = false;
+bool clipSupported = false;  // 来电显示是否支持
 unsigned long lastPrintTime = 0;
 unsigned long lastTimerExec = 0;
 unsigned long timerIntervalSec = 0;  // 使用秒避免溢出（支持到 136 年）
@@ -95,12 +97,34 @@ void setup() {
   
   // 加载配置
   loadConfig();
-  configValid = isConfigValid();\
+  configValid = isConfigValid();
   
-  WiFiMulti.addAP(WIFI_SSID, WIFI_PASS);
-  Serial.println("连接wifi");
+  // 添加所有启用的 WiFi 网络（WiFiMulti 会自动选择信号最强的）
+  int wifiCount = 0;
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    if (config.wifiNetworks[i].enabled && config.wifiNetworks[i].ssid.length() > 0) {
+      WiFiMulti.addAP(config.wifiNetworks[i].ssid.c_str(), config.wifiNetworks[i].password.c_str());
+      Serial.printf("已添加WiFi: %s\n", config.wifiNetworks[i].ssid.c_str());
+      wifiCount++;
+    }
+  }
+  
+  if (wifiCount == 0) {
+    Serial.println("警告: 未配置任何WiFi网络，请检查配置");
+  }
+  
+  Serial.println("连接WiFi...");
   while (WiFiMulti.run() != WL_CONNECTED) blink_short();
-  Serial.printf("WiFi已连接, IP: %s\n", WiFi.localIP().toString().c_str());
+  Serial.printf("WiFi已连接: %s, IP: %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+  
+  // 启动 mDNS 服务
+  if (MDNS.begin(MDNS_HOSTNAME)) {
+    MDNS.addService("http", "tcp", 80);  // 注册 HTTP 服务
+    Serial.println("mDNS 已启动");
+    Serial.printf("访问地址: http://%s.local 或 http://%s\n", MDNS_HOSTNAME, WiFi.localIP().toString().c_str());
+  } else {
+    Serial.println("mDNS 启动失败，请使用 IP 访问");
+  }
   
   // 启动 HTTP 服务器
   server.on("/", handleRoot);
@@ -124,26 +148,59 @@ void setup() {
   }
   Serial.println("模组AT响应正常");
   
-  // 设置短信自动上报
-  while (!sendATandWaitOK("AT+CNMI=2,2,0,0,0", 1000)) {
-    blink_short();
+  // 清除APN配置，让模组自动识别（换卡后自动适配）
+  Serial.print("重置APN配置... ");
+  if (sendATandWaitOK("AT+CGDCONT=1,\"IP\",\"\"", 2000)) {
+    Serial.println("完成");
+  } else {
+    Serial.println("跳过");
   }
+  
+  // 设置短信自动上报
+  Serial.println("设置短信自动上报(AT+CNMI)...");
+  int retryCount = 0;
+  while (!sendATandWaitOK("AT+CNMI=2,2,0,0,0", 2000)) {
+    blink_short();
+    if (++retryCount >= 10) {
+      Serial.println("警告: AT+CNMI 设置失败，跳过");
+      break;
+    }
+  }
+  if (retryCount < 10) Serial.println("AT+CNMI 设置成功");
   
   // 配置 PDU 模式
-  while (!sendATandWaitOK("AT+CMGF=0", 1000)) {
+  Serial.println("配置PDU模式(AT+CMGF=0)...");
+  retryCount = 0;
+  while (!sendATandWaitOK("AT+CMGF=0", 2000)) {
     blink_short();
+    if (++retryCount >= 10) {
+      Serial.println("警告: AT+CMGF 设置失败，跳过");
+      break;
+    }
   }
+  if (retryCount < 10) Serial.println("AT+CMGF 设置成功");
   
   // 等待 CGATT 附着
+  Serial.println("等待网络附着(CGATT)...");
+  retryCount = 0;
   while (!waitCGATT1()) {
     blink_short();
+    if (++retryCount >= 30) {  // 网络附着可能需要更长时间
+      Serial.println("警告: 网络附着超时，继续执行");
+      break;
+    }
   }
+  if (retryCount < 30) Serial.println("网络已附着");
   
-  // 开启来电显示 (CLIP)
-  while (!sendATandWaitOK("AT+CLIP=1", 1000)) {
-    blink_short();
+  // 开启来电显示 (CLIP) - 可选功能，部分模组不支持
+  Serial.print("尝试开启来电显示(AT+CLIP)... ");
+  if (sendATandWaitOK("AT+CLIP=1", 2000)) {
+    clipSupported = true;
+    Serial.println("成功");
+  } else {
+    clipSupported = false;
+    Serial.println("不支持，跳过");
   }
-  Serial.println("来电显示已开启");
   Serial.println("模组初始化完成");
   digitalWrite(LED_BUILTIN, LOW);
   

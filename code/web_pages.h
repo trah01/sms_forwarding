@@ -11,10 +11,10 @@ const char* commonCss = R"(<style>
 :root{--primary:#6366f1;--primary-dark:#4f46e5;--bg:#f8fafc;--card:#ffffff;--text:#334155;--text-light:#64748b;--border:#e2e8f0;--success:#22c55e;--danger:#ef4444;--warning:#eab308;--info:#3b82f6}
 *{box-sizing:border-box;margin:0;padding:0;outline:none;-webkit-tap-highlight-color:transparent}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;padding:12px 12px 70px}
-.c{max-width:640px;margin:0 auto}
+.c{max-width:900px;margin:0 auto;padding:0 20px}
 
 /* 导航栏 */
-.nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,0.95);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;justify-content:space-around;padding:8px;z-index:999}
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:900px;background:rgba(255,255,255,0.95);backdrop-filter:blur(10px);border:1px solid var(--border);display:flex;justify-content:space-around;padding:8px;z-index:999;border-radius:16px;margin-bottom:12px;box-shadow:0 -2px 10px rgba(0,0,0,0.05)}
 .nav-item{flex:1;text-align:center;padding:6px;border-radius:12px;color:var(--text-light);font-size:0.75em;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:4px}
 .nav-item.active{color:var(--primary);background:#e0e7ff33}
 .nav-icon{width:24px;height:24px;background:currentcolor;mask-size:contain;mask-repeat:no-repeat;-webkit-mask-size:contain;-webkit-mask-repeat:no-repeat}
@@ -77,6 +77,11 @@ details[open] summary{border-bottom:1px solid var(--border)}
 /* 消息提示 */
 .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:#fff;padding:10px 20px;border-radius:99px;font-size:0.9em;z-index:9999;transition:opacity .3s;opacity:0;pointer-events:none}
 .toast.show{opacity:1;top:24px}
+
+/* 信息表格 */
+.info-table{width:100%;font-size:0.85em}
+.info-table td{padding:4px 0;border-bottom:1px solid #f1f5f9}
+.info-table td:first-child{color:var(--text-light);width:40%}
 </style>
 <script>
 const $=id=>document.getElementById(id);
@@ -89,14 +94,6 @@ let toastTimer;
 function toast(msg){
   let t=$('toast');t.innerText=msg;t.className='toast show';
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.className='toast',2000);
-}
-function swTab(n){
-  document.querySelectorAll('.nav-item').forEach((e,i)=>e.className='nav-item'+(i===n?' active':''));
-  document.querySelectorAll('.page').forEach((e,i)=>e.className='page'+(i===n?' active':''));
-  if(n===0){/*概览自动加载已做*/}
-  if(n===1){/*控制*/}
-  if(n===2)loadHist();
-  if(n===3){/*配置*/}
 }
 </script>)";
 
@@ -122,7 +119,7 @@ const char* htmlPage = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UT
     <span>历史</span>
   </div>
   <div class="nav-item" onclick="swTab(3)">
-    <div class="nav-icon" style="-webkit-mask-image:url('data:image/svg+xml;utf8,<svg viewBox=\'0 0 24 24\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L5.09 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z\'/></svg>')"></div>
+    <div class="nav-icon" style="-webkit-mask-image:url('data:image/svg+xml;utf8,<svg viewBox=%270 0 24 24%27 xmlns=%27http://www.w3.org/2000/svg%27><path d=%27M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97s-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1s.03.65.07.97l-2.11 1.66c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.06.74 1.69.99l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.26 1.17-.59 1.69-.99l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.66z%27/></svg>');mask-image:url('data:image/svg+xml;utf8,<svg viewBox=%270 0 24 24%27 xmlns=%27http://www.w3.org/2000/svg%27><path d=%27M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97s-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1s.03.65.07.97l-2.11 1.66c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.06.74 1.69.99l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.26 1.17-.59 1.69-.99l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.66z%27/></svg>')"></div>
     <span>配置</span>
   </div>
 </div>
@@ -151,7 +148,7 @@ const char* htmlPage = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UT
       <div class="stat-box" style="text-align:left">
         <div class="stat-tag">MQTT 状态</div>
         <div style="font-weight:700" id="mqS">%MQTT_STATUS%</div>
-        <span class="badge %MQTT_CLASS%">%MQTT_PREFIX%</span>
+        <div style="font-size:0.8em;color:var(--text-light);margin-top:4px;word-break:break-all" id="mqTopics">%MQTT_TOPICS%</div>
       </div>
     </div>
     
@@ -162,6 +159,10 @@ const char* htmlPage = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UT
        <div style="position:absolute;top:10px;right:10px" class="badge b-wait" id="modSim">SIM?</div>
     </div>
 
+    <div class="sw-row">
+      <span style="font-weight:600;color:#64748b">来电通知</span>
+      <span class="badge %CLIP_CLASS%">%CLIP_STATUS%</span>
+    </div>
     <div class="sw-row">
       <span style="font-weight:600;color:#64748b">系统看门狗</span>
       <span class="badge b-ok">30秒自动复位</span>
@@ -225,6 +226,16 @@ const char* htmlPage = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UT
   <form id="cf" onsubmit="return saveAll(event)">
   
   <details open>
+    <summary>WiFi 网络 <span class="card-sub">自动选择信号最强的</span></summary>
+    <div class="det-body">
+      %WIFI_NETWORKS%
+      <div style="font-size:0.85em;color:var(--text-light);margin-top:8px">
+        💡 可配置多个WiFi，设备会自动连接信号最强的网络。修改后需重启生效。
+      </div>
+    </div>
+  </details>
+
+  <details>
     <summary>Web 管理 & 邮箱</summary>
     <div class="det-body">
       <div class="grid-2">
@@ -347,6 +358,13 @@ $('tmType').value=tm.tp;$('tmInt').value=tm.int;$('tmPh').value=tm.ph;$('tmMsg')
 if(tm.tp==1)$('tmSms').style.display='block';
 $('tmInfo').innerText = tm.en ? ('下次执行: '+(tm.rm/86400).toFixed(1)+'天后') : '任务已禁用';
 
+// 页面切换
+function swTab(n){
+  document.querySelectorAll('.nav-item').forEach((e,i)=>e.className='nav-item'+(i===n?' active':''));
+  document.querySelectorAll('.page').forEach((e,i)=>e.className='page'+(i===n?' active':''));
+  if(n===2)loadHist();
+}
+
 // 交互函数
 function xToggle(id){
   var i=$(id),s=$(id+'Sw');
@@ -366,6 +384,11 @@ function chTog(i){
   if(v.value==='true'){v.value='false';s.className='sw'}
   else{v.value='true';s.className='sw on'}
 }
+function wfTog(i){
+  var v=$('wfe'+i),s=$('wfs'+i);
+  if(v.value==='true'){v.value='false';s.className='sw'}
+  else{v.value='true';s.className='sw on'}
+}
 function upd(i){
   var t=$('tp'+i).value;
   $('cf'+i).style.display=(t=='4')?'block':'none'; // 自定义模板
@@ -379,18 +402,20 @@ function autoLoad(){
     $('wifiS').innerText=d.wifiRssi+' dBm';
     var h=Math.floor(d.uptime/3600);
     $('upT').innerText='运行 '+h+' 小时 / 内存 '+(d.freeHeap/1024).toFixed(0)+'K';
-  });
+  }).catch(e=>{console.log('stats error',e)});
+  
   // 自动查询模组信息
   fetch('/query?type=network').then(r=>r.json()).then(d=>{
-    if(d.success){$('modNet').innerText=d.message;$('modNet').style.color='#15803d'}
+    if(d.success){$('modNet').innerHTML=d.message;$('modNet').style.color='#15803d'}
     else{$('modNet').innerText='未注册网络';$('modNet').style.color='#b91c1c'}
-  });
+  }).catch(e=>{$('modNet').innerText='查询失败';console.log('network error',e)});
+  
   setTimeout(()=>{
-    fetch('/query?type=signal').then(r=>r.json()).then(d=>{$('modSig').innerText=d.message});
+    fetch('/query?type=signal').then(r=>r.json()).then(d=>{$('modSig').innerHTML=d.message}).catch(e=>{});
     fetch('/query?type=siminfo').then(r=>r.json()).then(d=>{
         var s=$('modSim');
         if(d.success){s.innerText='SIM OK';s.className='badge b-ok'}else{s.innerText='SIM ERR';s.className='badge b-err'}
-    });
+    }).catch(e=>{});
   },2000);
 }
 
@@ -428,7 +453,6 @@ function queryBalance(){
 }
 
 %CALL_FORWARD_JS%
-}
 
 function loadHist(){
   $('hList').innerHTML='<div style="text-align:center;padding:20px;color:#94a3b8">加载中...</div>';

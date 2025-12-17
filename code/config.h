@@ -9,6 +9,9 @@
 #define TXD 3
 #define RXD 4
 
+// mDNS 主机名（访问地址为 http://sms.local）
+#define MDNS_HOSTNAME "sms"
+
 // 推送通道类型
 enum PushType {
   PUSH_TYPE_NONE = 0,      // 未启用
@@ -58,8 +61,19 @@ struct Statistics {
   unsigned long bootCount;      // 启动次数
 };
 
+// WiFi 配置结构
+#define MAX_WIFI_NETWORKS 3
+struct WifiNetwork {
+  String ssid;
+  String password;
+  bool enabled;
+};
+
 // 配置参数结构体
 struct Config {
+  // WiFi 配置（支持多个网络）
+  WifiNetwork wifiNetworks[MAX_WIFI_NETWORKS];
+  
   String smtpServer;
   int smtpPort;
   String smtpUser;
