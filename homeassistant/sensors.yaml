@@ -69,11 +69,33 @@ mqtt:
       icon: mdi:account
       
     # 最近收到的短信 - 内容
+    # 注意: 状态值有 255 字符限制，完整内容存储在 message 属性中
     - name: "最近短信内容"
       unique_id: sms_forwarder_last_message
       state_topic: "sms/123456/sms/received"
-      value_template: "{{ value_json.message[:200] }}"
+      value_template: >-
+        {% set msg = value_json.message | default('') %}
+        {% if msg | length > 50 %}
+          {{ msg[:50] }}...
+        {% else %}
+          {{ msg }}
+        {% endif %}
+      # 完整短信内容存储在属性中，支持换行显示
+      json_attributes_topic: "sms/123456/sms/received"
+      json_attributes_template: >-
+        {
+          "message": {{ value_json.message | default('') | tojson }},
+          "sender": {{ value_json.sender | default('') | tojson }},
+          "time": {{ value_json.time | default('') | tojson }}
+        }
       icon: mdi:message-text
+      
+    # 最近来电号码
+    - name: "最近来电号码"
+      unique_id: sms_forwarder_last_caller
+      state_topic: "sms/123456/call"
+      value_template: "{{ value_json.caller }}"
+      icon: mdi:phone-incoming
 
   # 二进制传感器 - 在线状态
   binary_sensor:
@@ -85,3 +107,258 @@ mqtt:
       payload_off: "offline"
       device_class: connectivity
       icon: mdi:message-check
+
+  # 按钮 - 控制命令
+  button:
+    # 重启设备
+    - name: "短信转发器重启"
+      unique_id: sms_forwarder_restart
+      command_topic: "sms/123456/cmd"
+      payload_press: '{"action":"restart"}'
+      icon: mdi:restart
+      
+    # Ping 测试
+    - name: "短信转发器 Ping"
+      unique_id: sms_forwarder_ping
+      command_topic: "sms/123456/ping"
+      payload_press: '{}'
+      icon: mdi:access-point
+
+# ===========================================
+# 以下配置需要放在 configuration.yaml 根级别
+# ===========================================
+
+# 输入辅助实体 - 发送短信
+input_text:
+  sms_phone:
+    name: "目标手机号"
+    initial: ""
+    max: 20
+    icon: mdi:phone
+    
+  sms_message:
+    name: "短信内容"
+    initial: ""
+    max: 500
+    icon: mdi:message-text
+
+# 确认开关 - 用于二次确认
+input_boolean:
+  sms_confirm:
+    name: "确认发送短信"
+    initial: false
+    icon: mdi:check-circle-outline
+    
+  ping_confirm:
+    name: "确认执行 Ping"
+    initial: false
+    icon: mdi:check-circle-outline
+    
+  restart_confirm:
+    name: "确认重启设备"
+    initial: false
+    icon: mdi:check-circle-outline
+
+# ===========================================
+# 脚本 - 带二次确认的操作
+# ===========================================
+
+script:
+  # 发送短信 - 需要先打开确认开关
+  send_sms:
+    alias: "发送短信"
+    icon: mdi:message-arrow-right
+    sequence:
+      - choose:
+          # 检查确认开关是否已打开
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.sms_confirm
+                state: "on"
+              # 检查手机号不为空
+              - condition: template
+                value_template: "{{ states('input_text.sms_phone') | length > 0 }}"
+              # 检查短信内容不为空
+              - condition: template
+                value_template: "{{ states('input_text.sms_message') | length > 0 }}"
+            sequence:
+              - service: mqtt.publish
+                data:
+                  topic: "sms/123456/sms/send"
+                  payload: >-
+                    {"phone":"{{ states('input_text.sms_phone') }}","message":"{{ states('input_text.sms_message') }}"}
+              - service: persistent_notification.create
+                data:
+                  title: "✅ 短信已发送"
+                  message: "发送到：{{ states('input_text.sms_phone') }}"
+              # 重置确认开关
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.sms_confirm
+        default:
+          # 未确认时显示提醒
+          - service: persistent_notification.create
+            data:
+              title: "⚠️ 请先确认"
+              message: |
+                发送短信需要二次确认：
+                1. 请确认手机号和短信内容已填写
+                2. 打开「确认发送短信」开关
+                3. 再次点击「发送短信」按钮
+          
+  # 执行 Ping 测试 - 需要先打开确认开关
+  ping_sms_forwarder:
+    alias: "执行Ping测试"
+    icon: mdi:access-point
+    sequence:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.ping_confirm
+                state: "on"
+            sequence:
+              - service: mqtt.publish
+                data:
+                  topic: "sms/123456/ping"
+                  payload: '{}'
+              - service: persistent_notification.create
+                data:
+                  title: "✅ Ping命令已发送"
+                  message: "正在执行网络Ping测试"
+              # 重置确认开关
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.ping_confirm
+        default:
+          - service: persistent_notification.create
+            data:
+              title: "⚠️ 请先确认"
+              message: "请先打开「确认执行 Ping」开关，再点击执行"
+                
+  # 重启设备 - 需要先打开确认开关
+  restart_sms_forwarder:
+    alias: "重启短信转发器"
+    icon: mdi:restart
+    sequence:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.restart_confirm
+                state: "on"
+            sequence:
+              - service: mqtt.publish
+                data:
+                  topic: "sms/123456/cmd"
+                  payload: '{"action":"restart"}'
+              - service: persistent_notification.create
+                data:
+                  title: "✅ 重启命令已发送"
+                  message: "短信转发器将在几秒后重启"
+              # 重置确认开关
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.restart_confirm
+        default:
+          - service: persistent_notification.create
+            data:
+              title: "⚠️ 请先确认"
+              message: "请先打开「确认重启设备」开关，再点击重启"
+
+# ===========================================
+# Lovelace 仪表板卡片配置示例
+# 将以下内容复制到 Lovelace 的"编辑仪表板" -> "原始配置编辑器"中
+# ===========================================
+
+# 短信内容显示卡片 (支持换行)
+# 使用 Markdown 卡片可以正确显示多行短信内容
+# 
+# type: markdown
+# title: 📱 最近短信
+# content: |
+#   **发送者:** {{ state_attr('sensor.zui_jin_duan_xin_nei_rong', 'sender') }}
+#   
+#   **时间:** {{ state_attr('sensor.zui_jin_duan_xin_nei_rong', 'time') }}
+#   
+#   ---
+#   
+#   {{ state_attr('sensor.zui_jin_duan_xin_nei_rong', 'message') }}
+
+# 另一种方式：使用模板传感器 (放在 configuration.yaml 中)
+# 这种方式可以创建一个专门用于显示的实体
+template:
+  - sensor:
+      - name: "短信详情"
+        unique_id: sms_forwarder_full_message
+        state: >-
+          {{ states('sensor.zui_jin_duan_xin_fa_song_zhe') }}
+        attributes:
+          sender: >-
+            {{ state_attr('sensor.zui_jin_duan_xin_nei_rong', 'sender') }}
+          time: >-
+            {{ state_attr('sensor.zui_jin_duan_xin_nei_rong', 'time') }}
+          message: >-
+            {{ state_attr('sensor.zui_jin_duan_xin_nei_rong', 'message') }}
+          # 格式化显示，用于 Markdown 卡片
+          formatted: >-
+            📞 **发送者:** {{ state_attr('sensor.zui_jin_duan_xin_nei_rong', 'sender') }}
+            
+            🕐 **时间:** {{ state_attr('sensor.zui_jin_duan_xin_nei_rong', 'time') }}
+            
+            ---
+            
+            {{ state_attr('sensor.zui_jin_duan_xin_nei_rong', 'message') }}
+        icon: mdi:message-text-outline
+
+# ===========================================
+# Lovelace 卡片配置示例 - 发送短信（带二次确认）
+# ===========================================
+# 
+# 复制以下 YAML 到 Lovelace 仪表板中使用
+#
+# --- 发送短信卡片 ---
+# type: vertical-stack
+# cards:
+#   - type: entities
+#     title: 📤 发送短信
+#     entities:
+#       - entity: input_text.sms_phone
+#         name: 手机号码
+#       - entity: input_text.sms_message
+#         name: 短信内容
+#       - type: divider
+#       - entity: input_boolean.sms_confirm
+#         name: ✅ 我确认要发送此短信
+#   - type: button
+#     name: 发送短信
+#     icon: mdi:message-arrow-right
+#     tap_action:
+#       action: call-service
+#       service: script.send_sms
+#     icon_height: 40px
+#
+# --- 设备控制卡片 ---
+# type: vertical-stack
+# cards:
+#   - type: entities
+#     title: ⚙️ 设备控制
+#     entities:
+#       - entity: input_boolean.ping_confirm
+#         name: ✅ 确认执行 Ping 测试
+#       - entity: input_boolean.restart_confirm
+#         name: ✅ 确认重启设备（谨慎操作）
+#   - type: horizontal-stack
+#     cards:
+#       - type: button
+#         name: Ping 测试
+#         icon: mdi:access-point
+#         tap_action:
+#           action: call-service
+#           service: script.ping_sms_forwarder
+#         icon_height: 40px
+#       - type: button
+#         name: 重启设备
+#         icon: mdi:restart
+#         tap_action:
+#           action: call-service
+#           service: script.restart_sms_forwarder
+#         icon_height: 40px
