@@ -87,7 +87,7 @@
 | 接线示意图 | 实物连接图 |
 |:---:|:---:|
 | <img src="assets/connect.png" width="400" /> | <img src="assets/shiwu.png" width="400" /> |
-```
+
 
 简单说就是：
 - ESP32 的 **GPIO3** 接 ML307 的 **RX**
