@@ -342,9 +342,15 @@ void processSmsContent(const char* sender, const char* text, const char* timesta
   // 添加到短信历史
   addSmsToHistory(sender, cleanedText.c_str(), formattedTime.c_str());
   
-  // 检查黑白名单
+  // 检查号码过滤（黑白名单）
   if (isNumberFiltered(sender)) {
     Serial.println("号码被过滤，跳过推送");
+    return;
+  }
+  
+  // 检查内容关键词过滤
+  if (isContentFiltered(cleanedText.c_str())) {
+    Serial.println("内容被关键词过滤，跳过推送");
     return;
   }
   

@@ -22,6 +22,7 @@ void handleRestart();
 void handleSmsHistory();
 void handleStats();
 void handleFilterSave();
+void handleContentFilterSave();
 
 // AT 命令
 String sendATCommand(const char* cmd, unsigned long timeout);

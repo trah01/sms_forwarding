@@ -77,10 +77,15 @@ void saveConfig() {
   
   esp_task_wdt_reset();
   
-  // 保存黑白名单配置
+  // 保存黑白名单配置（号码过滤）
   preferences.putBool("filterEn", config.filterEnabled);
   preferences.putBool("filterWL", config.filterIsWhitelist);
   preferences.putString("filterList", config.filterList);
+  
+  // 保存内容关键词过滤配置
+  preferences.putBool("cfEn", config.contentFilterEnabled);
+  preferences.putBool("cfWL", config.contentFilterIsWhitelist);
+  preferences.putString("cfList", config.contentFilterList);
   
   preferences.end();
   esp_task_wdt_reset();
@@ -148,10 +153,15 @@ void loadConfig() {
   config.mqttHaDiscovery = preferences.getBool("mqttHaDisc", true);
   config.mqttHaPrefix = preferences.getString("mqttHaPre", "homeassistant");
   
-  // 加载黑白名单配置
+  // 加载黑白名单配置（号码过滤）
   config.filterEnabled = preferences.getBool("filterEn", false);
   config.filterIsWhitelist = preferences.getBool("filterWL", false);
   config.filterList = preferences.getString("filterList", "");
+  
+  // 加载内容关键词过滤配置
+  config.contentFilterEnabled = preferences.getBool("cfEn", false);
+  config.contentFilterIsWhitelist = preferences.getBool("cfWL", false);
+  config.contentFilterList = preferences.getString("cfList", "");
   
   preferences.end();
   
@@ -289,29 +299,70 @@ String getSmsHistory() {
   return result;
 }
 
+// 标准化号码（去除 +、空格、-，以及开头的国家区号 86）
+String normalizePhoneNumber(const String& rawNumber) {
+  String num = rawNumber;
+  num.trim();
+  
+  // 移除常见的特殊字符
+  num.replace("+", "");
+  num.replace(" ", "");
+  num.replace("-", "");
+  num.replace("(", "");
+  num.replace(")", "");
+  
+  // 如果以 86 开头且长度超过 11 位，去掉 86（中国区号）
+  if (num.startsWith("86") && num.length() > 11) {
+    num = num.substring(2);
+  }
+  
+  return num;
+}
+
+// 检查两个号码是否匹配（支持模糊匹配）
+bool phoneNumbersMatch(const String& senderNum, const String& filterNum) {
+  // 标准化两个号码
+  String sender = normalizePhoneNumber(senderNum);
+  String filter = normalizePhoneNumber(filterNum);
+  
+  // 精确匹配
+  if (sender == filter) return true;
+  
+  // 后缀匹配：如果过滤号码是发送者号码的后缀（处理不同格式的区号）
+  // 例如：发送者 8613800138000，过滤项 13800138000 -> 匹配
+  if (sender.length() > filter.length() && sender.endsWith(filter)) return true;
+  
+  // 反向后缀匹配：如果发送者号码是过滤号码的后缀
+  // 例如：发送者 13800138000，过滤项 8613800138000 -> 匹配
+  if (filter.length() > sender.length() && filter.endsWith(sender)) return true;
+  
+  return false;
+}
+
 // 检查号码是否被过滤
 bool isNumberFiltered(const char* number) {
   if (!config.filterEnabled) return false;
   if (config.filterList.length() == 0) return false;
   
-  String num = String(number);
-  num.trim();
+  String senderNum = String(number);
+  senderNum.trim();
   
-  // 精确匹配：将 filterList 按逗号分割，逐个比较
+  // 将 filterList 按逗号分割，逐个比较
   String list = config.filterList;
   list.replace(" ", ""); // 移除空格
   
   bool found = false;
   int startIdx = 0;
-  while (startIdx < list.length()) {
+  while (startIdx < (int)list.length()) {
     int commaIdx = list.indexOf(',', startIdx);
     if (commaIdx < 0) commaIdx = list.length();
     
-    String item = list.substring(startIdx, commaIdx);
-    item.trim();
+    String filterItem = list.substring(startIdx, commaIdx);
+    filterItem.trim();
     
-    if (item.length() > 0 && item == num) {
+    if (filterItem.length() > 0 && phoneNumbersMatch(senderNum, filterItem)) {
       found = true;
+      Serial.printf("号码匹配: %s ~ %s\n", senderNum.c_str(), filterItem.c_str());
       break;
     }
     startIdx = commaIdx + 1;
@@ -321,6 +372,42 @@ bool isNumberFiltered(const char* number) {
     return !found; // 白名单：未找到则过滤
   } else {
     return found; // 黑名单：找到则过滤
+  }
+}
+
+// 检查短信内容是否被过滤（关键词匹配）
+bool isContentFiltered(const char* content) {
+  if (!config.contentFilterEnabled) return false;
+  if (config.contentFilterList.length() == 0) return false;
+  
+  String text = String(content);
+  text.toLowerCase();  // 转为小写进行不区分大小写匹配
+  
+  // 将关键词列表按逗号分割，逐个搜索
+  String list = config.contentFilterList;
+  
+  bool found = false;
+  int startIdx = 0;
+  while (startIdx < (int)list.length()) {
+    int commaIdx = list.indexOf(',', startIdx);
+    if (commaIdx < 0) commaIdx = list.length();
+    
+    String keyword = list.substring(startIdx, commaIdx);
+    keyword.trim();
+    keyword.toLowerCase();  // 关键词也转小写
+    
+    if (keyword.length() > 0 && text.indexOf(keyword) >= 0) {
+      found = true;
+      Serial.printf("关键词匹配: '%s' 在内容中找到\n", keyword.c_str());
+      break;
+    }
+    startIdx = commaIdx + 1;
+  }
+  
+  if (config.contentFilterIsWhitelist) {
+    return !found; // 白名单：未找到关键词则过滤（只转发包含关键词的）
+  } else {
+    return found; // 黑名单：找到关键词则过滤（拦截包含关键词的）
   }
 }
 

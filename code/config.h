@@ -105,11 +105,16 @@ struct Config {
   bool mqttHaDiscovery;     // 启用 HA 自动发现
   String mqttHaPrefix;      // HA 发现前缀，默认 "homeassistant"
   
-  // 黑白名单配置
+  // 黑白名单配置（按号码过滤）
   bool filterEnabled;          // 是否启用过滤
   bool filterIsWhitelist;      // true=白名单, false=黑名单
   // 使用单个长字符串存储，内存中逗号分隔，避免定义大数组占用栈空间
   String filterList;  
+  
+  // 内容关键词过滤
+  bool contentFilterEnabled;      // 是否启用内容过滤
+  bool contentFilterIsWhitelist;  // true=白名单(只转发包含关键词的), false=黑名单(拦截包含关键词的)
+  String contentFilterList;       // 关键词列表，逗号分隔
 };
 
 // 默认Web管理账号密码
@@ -167,7 +172,10 @@ String getDeviceUrl();
 void initSmsStorage();
 void addSmsToHistory(const char* sender, const char* message, const char* timestamp);
 String getSmsHistory();
+String normalizePhoneNumber(const String& rawNumber);
+bool phoneNumbersMatch(const String& senderNum, const String& filterNum);
 bool isNumberFiltered(const char* number);
+bool isContentFiltered(const char* content);
 void saveStats();
 void loadStats();
 

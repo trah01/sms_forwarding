@@ -140,7 +140,8 @@ void setup() {
   server.on("/restart", HTTP_POST, handleRestart);     // 重启
   server.on("/history", handleSmsHistory);             // 短信历史
   server.on("/stats", handleStats);                    // 统计信息
-  server.on("/filter", HTTP_POST, handleFilterSave);   // 黑白名单保存
+  server.on("/filter", HTTP_POST, handleFilterSave);   // 号码过滤保存
+  server.on("/contentfilter", HTTP_POST, handleContentFilterSave);  // 内容过滤保存
   server.begin();
   Serial.println("HTTP服务器已启动");
   

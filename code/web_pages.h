@@ -56,6 +56,16 @@ details[open] summary:after{content:'-'}
 details[open] summary{border-bottom:1px solid var(--border)}
 .det-body{padding:16px}
 
+/* 模式切换按钮组 */
+.mode-toggle{display:flex;gap:8px;margin-bottom:12px}
+.mode-btn{flex:1;padding:12px 8px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;transition:all .2s;font-size:0.9em}
+.mode-btn:hover{border-color:#cbd5e1;background:#f8fafc}
+.mode-btn.active{border-color:var(--primary);background:#eef2ff}
+.mode-btn .mode-icon{font-size:1.4em;margin-bottom:4px}
+.mode-btn .mode-title{font-weight:600;color:#1e293b}
+.mode-btn .mode-desc{font-size:0.8em;color:var(--text-light);margin-top:2px}
+.mode-btn.active .mode-title{color:var(--primary)}
+
 /* 开关行 */
 .sw-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;cursor:pointer}
 .sw{width:44px;height:24px;background:#cbd5e1;border-radius:24px;position:relative;transition:0.3s}
@@ -340,21 +350,71 @@ const char* htmlPage = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UT
   </details>
 
   <details>
-    <summary>黑白名单过滤 (Max 100)</summary>
+    <summary>号码黑白名单过滤 (Max 100) <span id="ftModeBadge" class="badge b-wait" style="margin-left:8px">未启用</span></summary>
     <div class="det-body">
-      <div class="sw-row" onclick="xToggle('ftEn')">
+      <div class="sw-row" onclick="xToggle('ftEn');updFtMode()">
          <span>启用过滤</span>
          <div id="ftEnSw" class="sw"></div>
          <input type="hidden" id="ftEn" name="filterEn" value="%FILTER_EN_VAL%">
       </div>
-      <div class="fg" style="margin-top:10px">
-        <div style="display:flex;gap:12px;margin-bottom:8px">
-          <label><input type="radio" name="filterIsWhitelist" value="false" style="width:auto"> 黑名单 (拦截)</label>
-          <label><input type="radio" name="filterIsWhitelist" value="true" style="width:auto"> 白名单 (放行)</label>
+      <div id="ftModeBox" style="margin-top:12px">
+        <label style="margin-bottom:8px">过滤模式</label>
+        <div class="mode-toggle">
+          <div class="mode-btn" id="modeBl" onclick="setFtMode(false)">
+            <div class="mode-icon">🚫</div>
+            <div class="mode-title">黑名单模式</div>
+            <div class="mode-desc">拦截列表中的号码</div>
+          </div>
+          <div class="mode-btn" id="modeWl" onclick="setFtMode(true)">
+            <div class="mode-icon">✅</div>
+            <div class="mode-title">仅白名单</div>
+            <div class="mode-desc">只接收列表中的号码</div>
+          </div>
         </div>
-        <textarea id="ftList" name="filterList" rows="5" placeholder="输入号码，多个号码用逗号分隔，例如: 10086,13800000000"></textarea>
+        <input type="hidden" id="ftWl" name="filterIsWhitelist" value="%FILTER_WL_VAL%">
+        <div id="ftModeHint" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.85em"></div>
+        <div class="fg">
+          <label id="ftListLabel">号码列表</label>
+          <textarea id="ftList" name="filterList" rows="5" placeholder="输入号码，多个号码用逗号分隔，例如: 10086,13800000000"></textarea>
+        </div>
       </div>
       <button type="button" class="btn btn-w" onclick="saveFilter()">仅保存名单设置</button>
+    </div>
+  </details>
+
+  <details>
+    <summary>内容关键词过滤 <span id="cfModeBadge" class="badge b-wait" style="margin-left:8px">未启用</span></summary>
+    <div class="det-body">
+      <div class="sw-row" onclick="xToggle('cfEn');updCfMode()">
+         <span>启用内容过滤</span>
+         <div id="cfEnSw" class="sw"></div>
+         <input type="hidden" id="cfEn" name="contentFilterEn" value="%CF_EN_VAL%">
+      </div>
+      <div id="cfModeBox" style="margin-top:12px">
+        <label style="margin-bottom:8px">过滤模式</label>
+        <div class="mode-toggle">
+          <div class="mode-btn" id="cfModeBl" onclick="setCfMode(false)">
+            <div class="mode-icon">🚫</div>
+            <div class="mode-title">黑名单模式</div>
+            <div class="mode-desc">拦截包含关键词的短信</div>
+          </div>
+          <div class="mode-btn" id="cfModeWl" onclick="setCfMode(true)">
+            <div class="mode-icon">🔍</div>
+            <div class="mode-title">仅白名单</div>
+            <div class="mode-desc">只转发包含关键词的短信</div>
+          </div>
+        </div>
+        <input type="hidden" id="cfWl" name="contentFilterIsWhitelist" value="%CF_WL_VAL%">
+        <div id="cfModeHint" style="background:#fef9c3;border:1px solid #fcd34d;border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.85em"></div>
+        <div class="fg">
+          <label id="cfListLabel">关键词列表</label>
+          <textarea id="cfList" name="contentFilterList" rows="4" placeholder="输入关键词，多个关键词用逗号分隔，例如: 验证码,快递,银行"></textarea>
+        </div>
+        <div style="font-size:0.85em;color:var(--text-light);margin-bottom:12px">
+          💡 关键词匹配不区分大小写。可用于过滤广告短信或只接收重要短信。
+        </div>
+      </div>
+      <button type="button" class="btn btn-w" onclick="saveContentFilter()">仅保存关键词设置</button>
     </div>
   </details>
 
@@ -392,12 +452,18 @@ const char* htmlPage = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UT
 <script>
 // 初始化数据
 var ft={en:%FILTER_EN_BOOL%,wl:%FILTER_WL_BOOL%,ls:'%FILTER_LIST%'};
+var cf={en:%CF_EN_BOOL%,wl:%CF_WL_BOOL%,ls:'%CF_LIST%'};
 var tm={en:%TIMER_EN_BOOL%,tp:%TIMER_TP%,int:%TIMER_INT%,ph:'%TIMER_PH%',ms:'%TIMER_MS%',rm:%TIMER_RM%};
 
-// 状态初始化
+// 状态初始化 - 号码过滤
 if(ft.en){$('ftEnSw').className='sw on';$('ftEn').value='true'}
-if(ft.wl)document.getElementsByName('filterIsWhitelist')[1].checked=true;else document.getElementsByName('filterIsWhitelist')[0].checked=true;
+$('ftWl').value=ft.wl?'true':'false';
 $('ftList').value=ft.ls;
+
+// 状态初始化 - 内容过滤
+if(cf.en){$('cfEnSw').className='sw on';$('cfEn').value='true'}
+$('cfWl').value=cf.wl?'true':'false';
+$('cfList').value=cf.ls;
 
 if(tm.en){$('tmEnSw').className='sw on';$('tmEn').value='true'}
 $('tmType').value=tm.tp;$('tmInt').value=tm.int;$('tmPh').value=tm.ph;$('tmMsg').value=tm.ms;
@@ -436,6 +502,90 @@ function updTmInfo(){
   info.innerHTML=html;
 }
 updTmInfo();
+
+// 设置过滤模式
+function setFtMode(isWhitelist){
+  $('ftWl').value=isWhitelist?'true':'false';
+  updFtMode();
+}
+
+// 更新过滤模式 UI
+function updFtMode(){
+  var en=$('ftEn').value==='true';
+  var wl=$('ftWl').value==='true';
+  var badge=$('ftModeBadge');
+  var hint=$('ftModeHint');
+  var modeBox=$('ftModeBox');
+  
+  // 更新按钮选中状态
+  $('modeBl').className='mode-btn'+(wl?'':' active');
+  $('modeWl').className='mode-btn'+(wl?' active':'');
+  
+  // 更新徽章
+  if(!en){
+    badge.className='badge b-wait';badge.innerText='未启用';
+    modeBox.style.opacity='0.5';
+  }else{
+    modeBox.style.opacity='1';
+    if(wl){
+      badge.className='badge b-ok';badge.innerText='仅白名单';
+    }else{
+      badge.className='badge b-err';badge.innerText='黑名单';
+    }
+  }
+  
+  // 更新提示文字和标签
+  if(wl){
+    hint.innerHTML='<span style="color:#0369a1">✅ 仅白名单模式</span>：只有列表中的号码发送的短信会被转发，其他号码将被<b>拦截</b>。';
+    $('ftListLabel').innerText='允许的号码 (只接收这些)';
+  }else{
+    hint.innerHTML='<span style="color:#b91c1c">🚫 黑名单模式</span>：列表中的号码发送的短信会被<b>拦截</b>，其他号码正常转发。';
+    $('ftListLabel').innerText='拦截的号码 (屏蔽这些)';
+  }
+}
+updFtMode();
+
+// 设置内容过滤模式
+function setCfMode(isWhitelist){
+  $('cfWl').value=isWhitelist?'true':'false';
+  updCfMode();
+}
+
+// 更新内容过滤模式 UI
+function updCfMode(){
+  var en=$('cfEn').value==='true';
+  var wl=$('cfWl').value==='true';
+  var badge=$('cfModeBadge');
+  var hint=$('cfModeHint');
+  var modeBox=$('cfModeBox');
+  
+  // 更新按钮选中状态
+  $('cfModeBl').className='mode-btn'+(wl?'':' active');
+  $('cfModeWl').className='mode-btn'+(wl?' active':'');
+  
+  // 更新徽章
+  if(!en){
+    badge.className='badge b-wait';badge.innerText='未启用';
+    modeBox.style.opacity='0.5';
+  }else{
+    modeBox.style.opacity='1';
+    if(wl){
+      badge.className='badge b-ok';badge.innerText='仅白名单';
+    }else{
+      badge.className='badge b-warn';badge.innerText='黑名单';
+    }
+  }
+  
+  // 更新提示文字和标签
+  if(wl){
+    hint.innerHTML='<span style="color:#0369a1">🔍 仅白名单模式</span>：只有包含关键词的短信会被转发，其他短信将被<b>拦截</b>。适合只接收验证码等重要短信。';
+    $('cfListLabel').innerText='必须包含的关键词 (只转发这些)';
+  }else{
+    hint.innerHTML='<span style="color:#a16207">🚫 黑名单模式</span>：包含关键词的短信会被<b>拦截</b>，其他短信正常转发。适合过滤广告短信。';
+    $('cfListLabel').innerText='拦截的关键词 (屏蔽这些)';
+  }
+}
+updCfMode();
 
 // 页面切换
 function swTab(n){
@@ -645,9 +795,18 @@ function saveFilter(){
   var ls=$('ftList').value.split(/[,，\n]/).map(s=>s.trim()).filter(s=>s).join(',');
   postJ('/filter',{
     enabled: $('ftEn').value==='true',
-    whitelist: document.getElementsByName('filterIsWhitelist')[1].checked,
+    whitelist: $('ftWl').value==='true',
     numbers: ls.split(',') //后端兼容数组格式
-  }, d=>toast('已保存过滤名单'));
+  }, d=>toast('已保存号码过滤设置'));
+}
+
+function saveContentFilter(){
+  var ls=$('cfList').value.split(/[,，\n]/).map(s=>s.trim()).filter(s=>s).join(',');
+  postJ('/contentfilter',{
+    enabled: $('cfEn').value==='true',
+    whitelist: $('cfWl').value==='true',
+    keywords: ls
+  }, d=>toast('已保存关键词过滤设置'));
 }
 
 function saveTimer(){

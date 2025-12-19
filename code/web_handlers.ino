@@ -168,12 +168,24 @@ void handleRoot() {
   html.replace("%FILTER_EN_VAL%", config.filterEnabled ? "true" : "false");
   html.replace("%FILTER_EN_BOOL%", config.filterEnabled ? "true" : "false"); // JS bool
   html.replace("%FILTER_WL_BOOL%", config.filterIsWhitelist ? "true" : "false"); // JS bool
+  html.replace("%FILTER_WL_VAL%", config.filterIsWhitelist ? "true" : "false"); // hidden input value
   
   // 处理 filterList 换行符，避免破坏 JS 字符串
   String safeFilterList = config.filterList;
   safeFilterList.replace("\n", "");
   safeFilterList.replace("\r", "");
   html.replace("%FILTER_LIST%", safeFilterList);
+
+  // 5.5 内容关键词过滤配置
+  html.replace("%CF_EN_VAL%", config.contentFilterEnabled ? "true" : "false");
+  html.replace("%CF_EN_BOOL%", config.contentFilterEnabled ? "true" : "false");
+  html.replace("%CF_WL_BOOL%", config.contentFilterIsWhitelist ? "true" : "false");
+  html.replace("%CF_WL_VAL%", config.contentFilterIsWhitelist ? "true" : "false");
+  
+  String safeCfList = config.contentFilterList;
+  safeCfList.replace("\n", "");
+  safeCfList.replace("\r", "");
+  html.replace("%CF_LIST%", safeCfList);
 
   // 6. 定时任务配置 (Js 对象初始化)
   html.replace("%TIMER_EN_VAL%", config.timerEnabled ? "true" : "false");
@@ -546,5 +558,28 @@ void handleFilterSave() {
   }
   
   saveConfig();
-  server.send(200, "application/json", "{\"success\":true,\"message\":\"名单已更新\"}");
+  server.send(200, "application/json", "{\"success\":true,\"message\":\"号码名单已更新\"}");
+}
+
+// 保存内容关键词过滤配置
+void handleContentFilterSave() {
+  if (!checkAuth()) return;
+  
+  String body = server.arg("plain");
+  // 简单 JSON 解析
+  config.contentFilterEnabled = body.indexOf("\"enabled\":true") >= 0;
+  config.contentFilterIsWhitelist = body.indexOf("\"whitelist\":true") >= 0;
+  
+  // 解析 keywords 字符串
+  int kwStart = body.indexOf("\"keywords\":\"");
+  if (kwStart > 0) {
+    int valStart = kwStart + 12;  // 跳过 "keywords":"
+    int valEnd = body.indexOf("\"", valStart);
+    if (valEnd > valStart) {
+      config.contentFilterList = body.substring(valStart, valEnd);
+    }
+  }
+  
+  saveConfig();
+  server.send(200, "application/json", "{\"success\":true,\"message\":\"关键词过滤已更新\"}");
 }
