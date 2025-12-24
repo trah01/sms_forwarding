@@ -1,7 +1,7 @@
 # 低成本短信转发器
 
 用低成本硬件实现短信自动转发，只需要提供供电和WiFi即可，收到短信后自动推送到手机/邮箱/智能家居，再也不怕错过验证码！
-虽然芯片标记的全网通，该项目可能不支持电信卡，使用电信卡会连不上网，具体请自测。
+虽然芯片标记的全网通，但我也不确定哪些能用，目前只测试过移动的渠道是可以的，其他的需要自测了。
 
 > 本项目基于 [chenxuuu/sms_forwarding](https://github.com/chenxuuu/sms_forwarding/) 进行二次开发，原项目采用 MIT 协议。本项目保留原作者版权声明，并在此基础上增加/改动了功能。
 > 原项目固件的视频教程：[B站视频](https://www.bilibili.com/video/BV1cSmABYEiX),少部分不适用于当前修改版，大部分通用。
@@ -9,7 +9,7 @@
 > 部分功能及ui设计参考[dushixiang/uart_sms_forwarder.git](https://github.com/dushixiang/uart_sms_forwarder)，该项目不用焊接，支持全网通，但需要一个可以运行后台程序的设备，需要的也可以看下这个项目
 
 
-**删除的功能：** PushPlus、Server酱（可用自定义 Webhook 替代）
+**删除的功能：** PushPlus、Server酱
 
 **主要改进：**
 - 重构代码结构，模块化设计
@@ -24,9 +24,6 @@
 ## 更新日志
 
 - ✨ 新增 Telegram Bot 推送
-- ✨ 新增企业微信机器人推送  
-- ✨ 新增钉钉机器人推送
-- ✨ 新增手动流量保号功能
 - ✨ 新增 mDNS 支持（可用 `http://sms.local` 访问）
 - ✨ 新增多 WiFi 配置（自动选择信号最强的网络）
 - ✨ 新增号码黑白名单过滤（支持模糊匹配，自动处理国家区号）
