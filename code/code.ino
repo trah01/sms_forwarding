@@ -184,17 +184,17 @@ void setup() {
   }
   if (retryCount < 10) Serial.println("AT+CMGF 设置成功");
   
-  // 等待网络注册（LTE/4G）
-  Serial.println("等待网络注册(CEREG)...");
+  // 等待 CGATT 附着
+  Serial.println("等待网络附着(CGATT)...");
   retryCount = 0;
-  while (!waitCEREG()) {
+  while (!waitCGATT1()) {
     blink_short();
-    if (++retryCount >= 30) {  // 网络注册可能需要较长时间
-      Serial.println("警告: 网络注册超时，继续执行");
+    if (++retryCount >= 30) {  // 网络附着可能需要更长时间
+      Serial.println("警告: 网络附着超时，继续执行");
       break;
     }
   }
-  if (retryCount < 30) Serial.println("网络已注册");
+  if (retryCount < 30) Serial.println("网络已附着");
   
 
   Serial.println("模组初始化完成");

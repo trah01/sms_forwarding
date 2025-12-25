@@ -27,7 +27,7 @@ void handleContentFilterSave();
 // AT 命令
 String sendATCommand(const char* cmd, unsigned long timeout);
 bool sendATandWaitOK(const char* cmd, unsigned long timeout);
-bool waitCEREG();
+bool waitCGATT1();
 void blink_short(unsigned long gap_time = 500);
 
 #endif
