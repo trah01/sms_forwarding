@@ -295,6 +295,7 @@ bool sendSMS(const char* phoneNumber, const char* message) {
         break;
       }
     }
+    esp_task_wdt_reset();  // 喂狗
   }
   
   if (!gotPrompt) {
@@ -323,6 +324,7 @@ bool sendSMS(const char* phoneNumber, const char* message) {
         return false;
       }
     }
+    esp_task_wdt_reset();  // 喂狗，等待响应可能需要 30 秒
   }
   Serial.println("短信发送超时");
   return false;

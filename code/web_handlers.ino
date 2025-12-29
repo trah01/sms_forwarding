@@ -35,6 +35,7 @@ String sendATCommand(const char* cmd, unsigned long timeout) {
         return resp;
       }
     }
+    esp_task_wdt_reset();  // 喂狗
   }
   return resp;
 }
@@ -52,6 +53,7 @@ bool sendATandWaitOK(const char* cmd, unsigned long timeout) {
       if (resp.indexOf("OK") >= 0) return true;
       if (resp.indexOf("ERROR") >= 0) return false;
     }
+    esp_task_wdt_reset();  // 喂狗
   }
   return false;
 }
@@ -68,6 +70,7 @@ bool waitCGATT1() {
       if (resp.indexOf("+CGATT: 1") >= 0) return true;
       if (resp.indexOf("+CGATT: 0") >= 0) return false;
     }
+    esp_task_wdt_reset();  // 喂狗
   }
   return false;
 }
@@ -81,6 +84,7 @@ void resetModule() {
 
 // LED 闪烁
 void blink_short(unsigned long gap_time) {
+  esp_task_wdt_reset();  // 闪烁时喂狗
   digitalWrite(LED_BUILTIN, LOW);
   delay(50);
   digitalWrite(LED_BUILTIN, HIGH);
@@ -167,6 +171,32 @@ void handleRoot() {
   safeCfList.replace("\n", "");
   safeCfList.replace("\r", "");
   html.replace("%CF_LIST%", safeCfList);
+  
+  // 5.8 定时切换配置
+  html.replace("%SF_EN_VAL%", config.schedFilterEnabled ? "true" : "false");
+  html.replace("%SF_EN_BOOL%", config.schedFilterEnabled ? "true" : "false");
+  html.replace("%SF_START_H%", String(config.schedFilterStartHour));
+  html.replace("%SF_START_M%", String(config.schedFilterStartMin));
+  html.replace("%SF_END_H%", String(config.schedFilterEndHour));
+  html.replace("%SF_END_M%", String(config.schedFilterEndMin));
+  
+  // 时段 A 模式选中状态
+  html.replace("%SF_MA0%", config.schedFilterModeA == 0 ? "selected" : "");
+  html.replace("%SF_MA1%", config.schedFilterModeA == 1 ? "selected" : "");
+  html.replace("%SF_MA2%", config.schedFilterModeA == 2 ? "selected" : "");
+  
+  // 时段 B 模式选中状态
+  html.replace("%SF_MB0%", config.schedFilterModeB == 0 ? "selected" : "");
+  html.replace("%SF_MB1%", config.schedFilterModeB == 1 ? "selected" : "");
+  html.replace("%SF_MB2%", config.schedFilterModeB == 2 ? "selected" : "");
+  
+  // JS 初始化变量
+  html.replace("%SF_SH%", String(config.schedFilterStartHour));
+  html.replace("%SF_SM%", String(config.schedFilterStartMin));
+  html.replace("%SF_EH%", String(config.schedFilterEndHour));
+  html.replace("%SF_EM%", String(config.schedFilterEndMin));
+  html.replace("%SF_MA%", String(config.schedFilterModeA));
+  html.replace("%SF_MB%", String(config.schedFilterModeB));
 
   // 6. 定时任务配置 (Js 对象初始化)
   html.replace("%TIMER_EN_VAL%", config.timerEnabled ? "true" : "false");
@@ -327,6 +357,18 @@ void handleSave() {
       config.filterList = server.arg("filterList");
       config.filterList.replace("\r", "");
       config.filterList.replace("\n", ","); // 换行转逗号
+  }
+
+  // 5.9 定时切换过滤模式 (全量保存时)
+  if (server.hasArg("schedFilterEn")) {
+      config.schedFilterEnabled = server.arg("schedFilterEn") == "true";
+      config.schedFilterStartHour = server.arg("schedFilterStartH").toInt();
+      config.schedFilterStartMin = server.arg("schedFilterStartM").toInt();
+      config.schedFilterEndHour = server.arg("schedFilterEndH").toInt();
+      config.schedFilterEndMin = server.arg("schedFilterEndM").toInt();
+      config.schedFilterModeA = server.arg("schedFilterModeA").toInt();
+      config.schedFilterModeB = server.arg("schedFilterModeB").toInt();
+      currentSchedFilterMode = -1; // 重置以便立即应用
   }
 
   // 定时任务配置 (全量保存时)
@@ -546,4 +588,64 @@ void handleContentFilterSave() {
   
   saveConfig();
   server.send(200, "application/json", "{\"success\":true,\"message\":\"关键词过滤已更新\"}");
+}
+
+// 保存定时过滤配置
+void handleSchedFilterSave() {
+  if (!checkAuth()) return;
+  
+  String body = server.arg("plain");
+  
+  // 解析 JSON
+  config.schedFilterEnabled = body.indexOf("\"enabled\":true") >= 0;
+  
+  // startHour
+  int shIdx = body.indexOf("\"startHour\":");
+  if (shIdx > 0) config.schedFilterStartHour = body.substring(shIdx + 12).toInt();
+  
+  // startMin
+  int smIdx = body.indexOf("\"startMin\":");
+  if (smIdx > 0) config.schedFilterStartMin = body.substring(smIdx + 11).toInt();
+  
+  // endHour
+  int ehIdx = body.indexOf("\"endHour\":");
+  if (ehIdx > 0) config.schedFilterEndHour = body.substring(ehIdx + 10).toInt();
+  
+  // endMin
+  int emIdx = body.indexOf("\"endMin\":");
+  if (emIdx > 0) config.schedFilterEndMin = body.substring(emIdx + 9).toInt();
+  
+  // modeA
+  int maIdx = body.indexOf("\"modeA\":");
+  if (maIdx > 0) config.schedFilterModeA = body.substring(maIdx + 8).toInt();
+  
+  // modeB
+  int mbIdx = body.indexOf("\"modeB\":");
+  if (mbIdx > 0) config.schedFilterModeB = body.substring(mbIdx + 8).toInt();
+  
+  // 边界检查
+  if (config.schedFilterStartHour < 0 || config.schedFilterStartHour > 23) config.schedFilterStartHour = 22;
+  if (config.schedFilterStartMin < 0 || config.schedFilterStartMin > 59) config.schedFilterStartMin = 0;
+  if (config.schedFilterEndHour < 0 || config.schedFilterEndHour > 23) config.schedFilterEndHour = 8;
+  if (config.schedFilterEndMin < 0 || config.schedFilterEndMin > 59) config.schedFilterEndMin = 0;
+  if (config.schedFilterModeA < 0 || config.schedFilterModeA > 2) config.schedFilterModeA = 1;
+  if (config.schedFilterModeB < 0 || config.schedFilterModeB > 2) config.schedFilterModeB = 0;
+  
+  // 重置定时检查状态，立即应用
+  currentSchedFilterMode = -1;
+  
+  saveConfig();
+  
+  // 通过 MQTT 发布状态更新
+  if (config.mqttEnabled && mqttClient.connected()) {
+    publishSchedFilterStatus();
+  }
+  
+  Serial.printf("定时过滤已更新: %s, %02d:%02d-%02d:%02d, A=%d, B=%d\n",
+    config.schedFilterEnabled ? "启用" : "禁用",
+    config.schedFilterStartHour, config.schedFilterStartMin,
+    config.schedFilterEndHour, config.schedFilterEndMin,
+    config.schedFilterModeA, config.schedFilterModeB);
+  
+  server.send(200, "application/json", "{\"success\":true,\"message\":\"定时过滤已更新\"}");
 }

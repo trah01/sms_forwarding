@@ -204,7 +204,7 @@ const char* htmlPage = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UT
 
     <div class="sw-row">
       <span style="font-weight:600;color:#64748b">系统看门狗</span>
-      <span class="badge b-ok">30秒自动复位</span>
+      <span class="badge b-ok">60秒自动复位</span>
     </div>
   </div>
 </div>
@@ -456,7 +456,7 @@ const char* htmlPage = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UT
   </details>
 
   <details>
-    <summary>号码黑白名单过滤 (Max 100) <span id="ftModeBadge" class="badge b-wait" style="margin-left:8px">未启用</span></summary>
+    <summary>号码黑白名单过滤 (Max 100) <span id="ftModeBadge" class="badge b-wait" style="margin-left:auto;margin-right:8px">未启用</span></summary>
     <div class="det-body">
       <div class="sw-row" onclick="xToggle('ftEn');updFtMode()">
          <span>启用过滤</span>
@@ -489,7 +489,7 @@ const char* htmlPage = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UT
   </details>
 
   <details>
-    <summary>内容关键词过滤 <span id="cfModeBadge" class="badge b-wait" style="margin-left:8px">未启用</span></summary>
+    <summary>内容关键词过滤 <span id="cfModeBadge" class="badge b-wait" style="margin-left:auto;margin-right:8px">未启用</span></summary>
     <div class="det-body">
       <div class="sw-row" onclick="xToggle('cfEn');updCfMode()">
          <span>启用内容过滤</span>
@@ -525,7 +525,62 @@ const char* htmlPage = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UT
   </details>
 
   <details>
-    <summary>定时任务 <span id="tmBadge" class="badge b-wait" style="margin-left:8px">未启用</span></summary>
+    <summary>定时切换过滤模式 <span id="sfBadge" class="badge b-wait" style="margin-left:auto;margin-right:8px">未启用</span></summary>
+    <div class="det-body">
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;margin-bottom:12px;font-size:0.85em">
+         根据时间自动切换过滤模式。例如：睡觉时切换到白名单模式减少干扰，白天使用黑名单或禁用过滤。
+      </div>
+      <div class="sw-row" onclick="xToggle('sfEn');updSfMode()">
+         <span>启用定时切换</span>
+         <div id="sfEnSw" class="sw"></div>
+         <input type="hidden" id="sfEn" name="schedFilterEn" value="%SF_EN_VAL%">
+      </div>
+      <div id="sfModeBox" style="margin-top:12px">
+        <label style="margin-bottom:8px;display:flex;align-items:center;gap:6px">🌙 时段 A (如夜间)</label>
+        <div class="grid-2" style="margin-bottom:12px">
+          <div class="fg" style="margin-bottom:0">
+            <label>开始时间</label>
+            <div style="display:flex;gap:4px;align-items:center">
+              <input type="number" id="sfStartH" name="schedFilterStartH" min="0" max="23" style="width:60px" value="%SF_START_H%">
+              <span>:</span>
+              <input type="number" id="sfStartM" name="schedFilterStartM" min="0" max="59" style="width:60px" value="%SF_START_M%">
+            </div>
+          </div>
+          <div class="fg" style="margin-bottom:0">
+            <label>结束时间</label>
+            <div style="display:flex;gap:4px;align-items:center">
+              <input type="number" id="sfEndH" name="schedFilterEndH" min="0" max="23" style="width:60px" value="%SF_END_H%">
+              <span>:</span>
+              <input type="number" id="sfEndM" name="schedFilterEndM" min="0" max="59" style="width:60px" value="%SF_END_M%">
+            </div>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-bottom:12px">
+          <div class="fg" style="margin-bottom:0">
+            <label>时段 A 过滤模式</label>
+            <select id="sfModeA" name="schedFilterModeA">
+              <option value="0" %SF_MA0%>禁用过滤</option>
+              <option value="1" %SF_MA1%>白名单模式</option>
+              <option value="2" %SF_MA2%>黑名单模式</option>
+            </select>
+          </div>
+          <div class="fg" style="margin-bottom:0">
+            <label>☀️ 时段 B 过滤模式</label>
+            <select id="sfModeB" name="schedFilterModeB">
+              <option value="0" %SF_MB0%>禁用过滤</option>
+              <option value="1" %SF_MB1%>白名单模式</option>
+              <option value="2" %SF_MB2%>黑名单模式</option>
+            </select>
+          </div>
+        </div>
+        <div id="sfInfo" style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px;font-size:0.85em"></div>
+      </div>
+      <button type="button" class="btn btn-w" style="margin-top:12px" onclick="saveSchedFilter()">仅保存定时设置</button>
+    </div>
+  </details>
+
+  <details>
+    <summary>定时任务 <span id="tmBadge" class="badge b-wait" style="margin-left:auto;margin-right:8px">未启用</span></summary>
     <div class="det-body">
       <div class="sw-row" onclick="xToggle('tmEn');updTmInfo()">
          <span>启用任务</span>
@@ -560,6 +615,7 @@ const char* htmlPage = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UT
 var ft={en:%FILTER_EN_BOOL%,wl:%FILTER_WL_BOOL%,ls:'%FILTER_LIST%'};
 var cf={en:%CF_EN_BOOL%,wl:%CF_WL_BOOL%,ls:'%CF_LIST%'};
 var tm={en:%TIMER_EN_BOOL%,tp:%TIMER_TP%,int:%TIMER_INT%,ph:'%TIMER_PH%',ms:'%TIMER_MS%',rm:%TIMER_RM%};
+var sf={en:%SF_EN_BOOL%,sh:%SF_SH%,sm:%SF_SM%,eh:%SF_EH%,em:%SF_EM%,ma:%SF_MA%,mb:%SF_MB%};
 
 // 状态初始化 - 号码过滤
 if(ft.en){$('ftEnSw').className='sw on';$('ftEn').value='true'}
@@ -570,6 +626,9 @@ $('ftList').value=ft.ls;
 if(cf.en){$('cfEnSw').className='sw on';$('cfEn').value='true'}
 $('cfWl').value=cf.wl?'true':'false';
 $('cfList').value=cf.ls;
+
+// 状态初始化 - 定时过滤
+if(sf.en){$('sfEnSw').className='sw on';$('sfEn').value='true'}
 
 if(tm.en){$('tmEnSw').className='sw on';$('tmEn').value='true'}
 $('tmType').value=tm.tp;$('tmInt').value=tm.int;$('tmPh').value=tm.ph;$('tmMsg').value=tm.ms;
@@ -692,6 +751,48 @@ function updCfMode(){
   }
 }
 updCfMode();
+
+// 更新定时过滤模式 UI
+function updSfMode(){
+  var en=$('sfEn').value==='true';
+  var badge=$('sfBadge');
+  var modeBox=$('sfModeBox');
+  var info=$('sfInfo');
+  
+  if(!en){
+    badge.className='badge b-wait';badge.innerText='未启用';
+    modeBox.style.opacity='0.5';
+    info.innerHTML='<div style="color:#64748b">⏸ 定时切换已禁用，将保持当前过滤模式</div>';
+    return;
+  }
+  
+  modeBox.style.opacity='1';
+  badge.className='badge b-ok';badge.innerText='已启用';
+  
+  var sh=$('sfStartH').value||22,sm=$('sfStartM').value||0;
+  var eh=$('sfEndH').value||8,em=$('sfEndM').value||0;
+  var ma=+$('sfModeA').value,mb=+$('sfModeB').value;
+  var maName=['禁用过滤','白名单','黑名单'][ma];
+  var mbName=['禁用过滤','白名单','黑名单'][mb];
+  
+  info.innerHTML='<div style="color:#92400e">⏰ <b>时段 A</b> ('+sh.toString().padStart(2,'0')+':'+sm.toString().padStart(2,'0')+' - '+eh.toString().padStart(2,'0')+':'+em.toString().padStart(2,'0')+'): <b>'+maName+'</b></div>'+
+    '<div style="color:#92400e;margin-top:4px">☀️ <b>时段 B</b> (其他时间): <b>'+mbName+'</b></div>';
+}
+updSfMode();
+
+// 保存定时过滤设置
+function saveSchedFilter(){
+  var d={
+    enabled:$('sfEn').value==='true',
+    startHour:+$('sfStartH').value,
+    startMin:+$('sfStartM').value,
+    endHour:+$('sfEndH').value,
+    endMin:+$('sfEndM').value,
+    modeA:+$('sfModeA').value,
+    modeB:+$('sfModeB').value
+  };
+  postJ('/schedfilter',d,d=>toast('已保存定时过滤设置'));
+}
 
 // 页面切换
 function swTab(n){

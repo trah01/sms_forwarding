@@ -115,6 +115,15 @@ struct Config {
   bool contentFilterEnabled;      // 是否启用内容过滤
   bool contentFilterIsWhitelist;  // true=白名单(只转发包含关键词的), false=黑名单(拦截包含关键词的)
   String contentFilterList;       // 关键词列表，逗号分隔
+  
+  // 定时过滤模式
+  bool schedFilterEnabled;        // 是否启用定时过滤
+  int schedFilterStartHour;       // 时段A开始时间 (0-23)
+  int schedFilterStartMin;        // 时段A开始分钟 (0-59)
+  int schedFilterEndHour;         // 时段A结束时间 (0-23)
+  int schedFilterEndMin;          // 时段A结束分钟 (0-59)
+  int schedFilterModeA;           // 时段A模式: 0=disabled, 1=whitelist, 2=blacklist
+  int schedFilterModeB;           // 时段B模式: 0=disabled, 1=whitelist, 2=blacklist
 };
 
 // 默认Web管理账号密码

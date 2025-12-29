@@ -87,6 +87,15 @@ void saveConfig() {
   preferences.putBool("cfWL", config.contentFilterIsWhitelist);
   preferences.putString("cfList", config.contentFilterList);
   
+  // 保存定时过滤配置
+  preferences.putBool("sfEn", config.schedFilterEnabled);
+  preferences.putInt("sfStartH", config.schedFilterStartHour);
+  preferences.putInt("sfStartM", config.schedFilterStartMin);
+  preferences.putInt("sfEndH", config.schedFilterEndHour);
+  preferences.putInt("sfEndM", config.schedFilterEndMin);
+  preferences.putInt("sfModeA", config.schedFilterModeA);
+  preferences.putInt("sfModeB", config.schedFilterModeB);
+  
   preferences.end();
   esp_task_wdt_reset();
   Serial.println("配置已保存");
@@ -162,6 +171,15 @@ void loadConfig() {
   config.contentFilterEnabled = preferences.getBool("cfEn", false);
   config.contentFilterIsWhitelist = preferences.getBool("cfWL", false);
   config.contentFilterList = preferences.getString("cfList", "");
+  
+  // 加载定时过滤配置
+  config.schedFilterEnabled = preferences.getBool("sfEn", false);
+  config.schedFilterStartHour = preferences.getInt("sfStartH", 22);  // 默认晚上10点
+  config.schedFilterStartMin = preferences.getInt("sfStartM", 0);
+  config.schedFilterEndHour = preferences.getInt("sfEndH", 8);       // 默认早上8点
+  config.schedFilterEndMin = preferences.getInt("sfEndM", 0);
+  config.schedFilterModeA = preferences.getInt("sfModeA", 1);        // 默认时段A白名单
+  config.schedFilterModeB = preferences.getInt("sfModeB", 0);        // 默认时段B禁用
   
   preferences.end();
   

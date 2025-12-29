@@ -406,6 +406,7 @@ void handlePing() {
     
     if (gotError || gotPingResult) break;
     delay(10);
+    esp_task_wdt_reset();  // 喂狗，等待 ping 可能需要 35 秒
   }
   
   Serial.println("\nPing操作完成");
